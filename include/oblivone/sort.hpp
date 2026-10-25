@@ -32,13 +32,13 @@
 
 namespace oblivone {
 
-// 参数。默认值就是 README 基准里用的那组。
+// 参数。默认值见 README；改动时同步更新文档和基准。
 struct options {
     // 调度层：n ≤ small_sort 交兜底；核心内：组 < leaf_sort 插入，≥ 继续。
     std::size_t small_sort = 16;
 
     // 叶子阈值。当前取 22：按 1:1:1:1 权重算出的中位最优值。
-    // 如果以后能分析出真实分布比例，用 bench/weighted.py 加权重重新计算 T。
+    // 如果以后能拿到真实分布概率，应重新标定这个值（见 docs/design.md §7）。
     // 0 表示不插入（纯 Oblivone，实验用）。
     std::size_t leaf_sort = 22;
 
@@ -62,6 +62,7 @@ struct default_fallback {
     }
 };
 
+// 内部实现：接口不保证稳定；测试/基准会直接使用，改动时同步更新。
 namespace detail {
 
 // int64 补码 -> 无符号，保序：
@@ -244,8 +245,8 @@ void xsort_by(std::vector<T>& v, KeyFn key,
     xsort_by(v.data(), v.size(), key, opt, fallback);
 }
 
-// OblivoneSort 核心：不做规模/有序性判断，直接分桶。
-// 给测试和“已知乱序”的调用方用；深度到顶仍会走兜底。
+// OblivoneSort 核心：跳过规模/有序性判断，直接分桶。
+// 适合“已知乱序”的调用方；深度到顶仍会走兜底。
 template <class T, class KeyFn, class Fallback = default_fallback>
 void oblivone_sort(T* data, std::size_t n, KeyFn key,
                    const options& opt = {}, Fallback fallback = Fallback{}) {

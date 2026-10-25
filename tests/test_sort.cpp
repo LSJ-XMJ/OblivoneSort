@@ -20,7 +20,7 @@ int g_failures = 0;
 
 template <class T>
 std::uint64_t key_of(const T& v) {
-    return oblivone::detail::to_key(v);
+    return oblivone::key_of(v);
 }
 
 template <class T>
@@ -259,7 +259,7 @@ void test_sort_by() {
     std::sort(expect.begin(), expect.end(),
               [](const record& a, const record& b) { return a.key < b.key; });
 
-    oblivone::sort_by(v, [](const record& r) { return oblivone::detail::to_key(r.key); });
+    oblivone::sort_by(v, [](const record& r) { return oblivone::key_of(r.key); });
 
     for (std::size_t i = 0; i < v.size(); ++i) {
         if (v[i].key != expect[i].key) {
