@@ -1,0 +1,13 @@
+# Normalize line endings to LF in the repository, on every platform.
+* text=auto eol=lf
+
+# Binary files (never convert)
+*.exe binary
+*.dll binary
+*.lib binary
+*.obj binary
+*.pdb binary
+*.png binary
+*.jpg binary
+*.zip binary
+*.7z binary

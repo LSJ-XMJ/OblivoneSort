@@ -14,3 +14,5 @@ CMakeCache.txt
 .idea/
 __pycache__/
 *.pyc
+docs/archive/
+research/
