@@ -4,7 +4,7 @@
 // Methodology: 1 warmup + N measured reps; report median.
 // Baselines: std::sort, LSD radix, OblivoneSort.
 //
-// Usage: bench_standard [n] [reps]
+// Usage: bench_standard [n] [reps] [scan_threshold]
 
 #include <oblivone/sort.hpp>
 
@@ -197,6 +197,9 @@ int main(int argc, char** argv) {
         (argc > 1) ? static_cast<std::size_t>(std::strtoull(argv[1], nullptr, 10))
                    : 1000000;
     const int reps = (argc > 2) ? std::atoi(argv[2]) : 5;
+    const std::size_t scan_threshold =
+        (argc > 3) ? static_cast<std::size_t>(std::strtoull(argv[3], nullptr, 10))
+                   : 1024;
 
 #ifdef _WIN32
     SetThreadAffinityMask(GetCurrentThread(), 1);
@@ -222,6 +225,7 @@ int main(int argc, char** argv) {
         };
         const auto radix = [](std::vector<double>& v) { radix_sort(v); };
         oblivone::options opt;
+        opt.scan_threshold = scan_threshold;
         const auto oblivone = [&](std::vector<double>& v) {
             oblivone::sort(v.data(), v.size(), opt);
         };

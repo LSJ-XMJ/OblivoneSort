@@ -32,6 +32,111 @@ g++ -std=c++17 -O2 -I ../include bench_sort.cpp -o bench_sort
   放到 `third_party/pdqsort.h`；CMake 检测到 `third_party/` 会自动加 include 路径。
 - **Boost.Sort**：安装 Boost，`<boost/sort/spreadsort/spreadsort.hpp>` 会被自动识别。
 
+## 2/3 元素：bench_tiny
+
+```powershell
+.\build\bench_tiny.exe 5000 5
+```
+
+5000 组，单位 ns/组：
+
+| n | 插入 | 专用 | 插入/专用 |
+|---:|---:|---:|---:|
+| 2 uniform | 5.70 | 7.41 | 0.77（插入更快） |
+| 2 normal | 4.77 | 7.12 | 0.67（插入更快） |
+| 3 uniform | 14.38 | 10.65 | **1.35×** |
+| 3 normal | 14.00 | 10.33 | **1.36×** |
+| 3 exponential | 14.22 | 9.20 | **1.55×** |
+| 3 few | 13.97 | 9.39 | **1.49×** |
+
+结论：**2 元素保留插入；3 元素改用专用 `sort3`**。
+
+### n=2 的 100 万组对比
+
+```powershell
+.\build\bench_sort2.exe 1000000 5
+```
+
+| 分布 | 插入 | move | swap | cached | branchless | raw `<` |
+|---|---:|---:|---:|---:|---:|---:|
+| uniform | 9.36 | 9.53 | 9.62 | 9.68 | 10.16 | 4.45 |
+| normal | 9.38 | 9.59 | 9.67 | 9.40 | 10.01 | 4.42 |
+| exponential | 5.64 | 5.61 | 5.52 | 5.37 | 5.92 | 4.44 |
+| few | 6.22 | 6.28 | 6.36 | 5.88 | 6.51 | 4.47 |
+
+结论：**compare + swap 本身不慢**；各写法差异在 ±5% 内，主要是噪声。
+`raw <` 4.4 vs key 9.4 说明成本主要在 `key()`（double→uint64）转换，
+不在比较/交换。之前 0.5× 的结论是小样本测量偏差；n=2 继续用插入排序。
+
+## 去掉 double→uint64 转换：bench_nokey
+
+```powershell
+.\build\bench_nokey.exe 1000000 3
+```
+
+同一批数据：double 排序（桶映射 key，叶子 direct double）vs 预先转成 `uint64_t` 键后直排（排序期零转换）。
+
+| 算法 | double | uint64 直排 | 差值 |
+|---|---:|---:|---:|
+| std::sort | 93.2 ms（key 比较器） | 53.0 ms | key 比较器使 std 慢 76% |
+| Oblivone | 18.65 ms（key 叶子） | 14.04 ms | **key 转换占 32.8%** |
+| Oblivone | 18.68 ms（double 叶子） | 14.04 ms | 叶子直比只省 0.2% |
+
+- raw `double` `<` 排序是 58.0 ms，`std + key` 是 93.2 ms：key 在每次比较里被调用，成本很高；
+- 叶子改成 direct double 后，整排序几乎不变（18.65 → 18.68，噪声级）：
+  **叶子比较只占 key 调用的一小部分**，大头在 min/max、计数、落位；
+- Oblivone 的 18.65 → 14.04 ms 是“排序期完全不转换”的上界；
+- 真正要省这笔钱，需要**预计算一次键**并让排序搬运 `(key, value)` 或维护键数组；
+  这会多 8n 字节和更大搬移量，实测 pair 反而慢 6.6%（见下节）；
+- 整数/无符号类型本身 key 是恒等映射，没有这笔开销。
+
+## 叶子 double 比较：bench_leaf_less
+
+```powershell
+.\build\bench_leaf_less.exe 1000000 5
+```
+
+1,000,000 个数组，ns/数组：
+
+| n | 分布 | 插入 key | 插入 double | 专用 key | 专用 double |
+|---:|---|---:|---:|---:|---:|
+| 2 | uniform | 6.27 | 5.15 | 9.76 | **4.54** |
+| 2 | normal | 6.25 | 5.29 | 9.61 | **4.60** |
+| 2 | exponential | 6.51 | 5.20 | 5.60 | **4.48** |
+| 2 | few | 6.68 | 5.17 | 6.07 | **4.48** |
+| 3 | uniform | 14.46 | 11.50 | 12.96 | **9.48** |
+| 3 | normal | 14.43 | 11.38 | 13.21 | **9.31** |
+| 3 | exponential | 14.17 | 11.54 | 10.47 | **9.64** |
+| 3 | few | 14.89 | 11.53 | 11.22 | **9.48** |
+
+结论：
+
+- double 路径下，n=2 用“一次比较 + 条件交换”最快（4.5 ns），
+  n=3 用 `sort3_less` 最快（9.3~9.6 ns）；
+- 通用 `sort_by`（自定义 key）仍走 key 版本，不强行用 double 比较；
+- `oblivone::sort(double*)` 会自动走 double 叶子比较。
+
+## 预计算键：bench_pair
+
+```powershell
+.\build\bench_pair.exe 1000000 3
+```
+
+把 `key()` 预计算一次，排序 `(key, value)` 对，排序期零转换：
+
+| 方案 | 1e6 时间 | ns/elem |
+|---|---:|---:|
+| double + key() | 17.99 ms | 17.99 |
+| (key,value) 对 | 19.17 ms | 19.17 |
+| 只排 uint64 键（上界） | 14.32 ms | 14.32 |
+
+- 去掉转换省了约 **3.77 ms**；
+- 但每个元素从 8 字节变成 16 字节搬移，额外成本约 **4.95 ms**；
+- 净结果：pair 比当前 double 路径慢 **6.6%**；
+- 结论：**预计算键“一直使用”在普通 `(key,value)` 布局下不划算**；
+  当前“重复 key() + 8 字节搬移”反而更好。
+- 如果键本来就有（例如直接排 uint64），那就不存在这笔转换成本。
+
 ## 已知排序对比：bench_known
 
 需要官方实现（不随仓库分发）：
@@ -66,50 +171,56 @@ MSVC 下 `ska_sort.hpp` 会触发编译器内部错误（C1001），`bench_known
 
 | 模式 | 最快 | 最快 ms | Oblivone ms | Oblivone/最快 |
 |---|---|---:|---:|---:|
-| random | **Oblivone** | 17.1 | 17.1 | 1.00 |
-| sorted | TimSort | 0.62 | 2.03 | 3.28 |
-| reverse | TimSort | 0.99 | 2.62 | 2.66 |
-| organ | **TimSort** | 0.99 | 17.69 | **17.8** |
-| sawtooth | pdqsort | 3.69 | 8.57 | 2.32 |
-| runs | **Oblivone** | 20.65 | 20.65 | 1.00 |
-| equal | TimSort | 0.62 | 2.40 | 3.85 |
-| few | pdqsort | 4.85 | 9.21 | 1.90 |
-| near 0.1% | TimSort | 0.66 | 2.03 | 3.09 |
-| near 1% | TimSort | 1.67 | 2.26 | 1.35 |
-| near 5% | **Oblivone** | 2.78 | 2.78 | 1.00 |
-| push front | **TimSort** | 1.22 | 17.96 | **14.7** |
-| push back | **TimSort** | 1.07 | 22.09 | **20.7** |
+| random | **Oblivone** | 18.4 | 18.4 | 1.00 |
+| sorted | TimSort | 0.67 | 2.05 | 3.07 |
+| reverse | TimSort | 1.13 | 2.43 | 2.15 |
+| organ | **TimSort** | 1.27 | 11.93 | **9.42** |
+| sawtooth | pdqsort | 4.33 | 9.81 | 2.27 |
+| runs | pdqsort | 22.62 | 30.85 | 1.36 |
+| equal | TimSort | 0.69 | 2.04 | 2.97 |
+| few | pdqsort | 4.24 | 9.64 | 2.27 |
+| near 0.1% | TimSort | 0.75 | 1.97 | 2.63 |
+| near 1% | TimSort | 1.61 | 1.95 | 1.21 |
+| near 5% | **Oblivone** | 2.33 | 2.33 | 1.00 |
+| push front | **TimSort** | 1.26 | 10.08 | **8.02** |
+| push back | **TimSort** | 1.14 | 15.43 | **13.5** |
 
-结论：**Oblivone 不是已知最快**；Timsort 在结构化/近有序/push 上碾压，
-pdqsort 在 few/sawtooth 上更快，Oblivone 只在 random/runs/near5 领先。
+结论：**Oblivone 不是已知最快**；Timsort 在结构化/近有序/push 上仍然明显更快，
+pdqsort 在 few/sawtooth 上更快，Oblivone 在 random/near5 领先；
+runs 对 run 长度敏感，1e6 这轮 pdqsort 略胜，1e7 时 Oblivone 领先。
+
+> `scan_threshold=256` 的嵌套扫描把 organ 从 17.8× 降到 9.4×、
+> push 从 14~20× 降到 8~13×，但仍未追上 TimSort。
 
 ## 标准模式：bench_standard
 
 ```powershell
-.\build\bench_standard.exe 1000000 5
+.\build\bench_standard.exe 1000000 5 256
 ```
 
 Bentley–McIlroy 风格的模式，1 次预热 + 5 次中位数，绑核；单位 ms：
 
 | 模式 | std | Oblivone | 加速 |
 |---|---:|---:|---:|
-| random | 58.2 | 18.8 | 3.10× |
-| sorted | 8.2 | 2.0 | 4.03× |
-| reverse | 6.6 | 2.6 | 2.55× |
-| organ | 31.1 | 19.2 | 1.62× |
-| sawtooth | 18.3 | 9.4 | 1.95× |
-| runs | 50.9 | 21.6 | 2.35× |
-| equal | 6.4 | 2.1 | 3.03× |
-| few | 12.8 | 9.2 | 1.40× |
-| near 0.1% | 8.6 | 1.9 | **4.64×** |
-| near 1% | 8.7 | 2.0 | **4.47×** |
-| near 5% | 9.3 | 2.4 | **3.92×** |
-| push front | 43.6 | 16.3 | 2.67× |
-| push back | 59.1 | 21.3 | 2.77× |
+| random | 69.2 | 18.4 | 3.77× |
+| sorted | 8.7 | 2.1 | 4.07× |
+| reverse | 6.5 | 2.4 | 2.68× |
+| organ | 33.5 | 12.6 | 2.67× |
+| sawtooth | 18.0 | 9.7 | 1.85× |
+| runs | 56.7 | 21.2 | 2.67× |
+| equal | 7.0 | 2.1 | 3.35× |
+| few | 13.9 | 10.6 | 1.32× |
+| near 0.1% | 8.6 | 1.9 | **4.62×** |
+| near 1% | 8.8 | 2.0 | **4.51×** |
+| near 5% | 9.3 | 2.4 | **3.85×** |
+| push front | 42.3 | 10.5 | 4.04× |
+| push back | 47.8 | 14.9 | 3.21× |
 
 - 近有序在加“带预算插入”之前只有 0.47~0.57×；现在是 3.9~4.6×；
-- n=1e7 时 near 0.1%/1%/5% 是 7.40×/5.75×/5.89×；
-- 仍偏弱：few 1.40×、organ 1.62×。
+- `scan_threshold=256` 的嵌套扫描把 organ 从 1.62× 提到 2.67×、
+  push 从 2.67/2.77× 提到 4.04/3.21×；
+- n=1e7 时 near 0.1%/1%/5% 约 4.4/6.3/3.6×（单次，有波动）；
+- 仍偏弱：few 1.32×、sawtooth 1.85×。
 
 ## 覆盖矩阵：bench_matrix
 

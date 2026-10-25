@@ -28,6 +28,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <type_traits>
 #include <vector>
 
 namespace oblivone {
@@ -41,6 +42,12 @@ struct options {
     // 如果以后能拿到真实分布概率，应重新标定这个值（见 docs/design.md §7）。
     // 0 表示不插入（纯 Oblivone，实验用）。
     std::size_t leaf_sort = 22;
+
+    // 嵌套块大于这个值时，先做一次正逆序扫描 + 带预算插入测试；
+    // 顶层 XSort 已经做过这两步，所以只在 depth > 0 时生效。
+    // 256 是折中：结构化块能受益，随机大块只多约 3% 扫描开销。
+    // 0 表示所有嵌套块都做；设得很大等于关闭。
+    std::size_t scan_threshold = 256;
 
     // 递归深度上限，防止自相似/对抗数据无限细分；到顶就交给兜底。
     int max_depth = 16;
@@ -90,6 +97,13 @@ inline std::uint64_t to_key(float v) noexcept {
     return to_key(static_cast<double>(v));
 }
 
+// 与 key_of(double) 顺序一致的直接比较：NaN 排最后，-0.0 == +0.0。
+inline bool less_double(double a, double b) noexcept {
+    if (a != a) return false;  // NaN 不小于任何值
+    if (b != b) return true;   // 任何值小于 NaN
+    return a < b;
+}
+
 // 极小块的插入排序：省掉递归调用和桶表的开销。
 template <class T, class KeyFn>
 inline void insertion_sort(T* a, std::size_t n, const KeyFn& key) {
@@ -102,6 +116,61 @@ inline void insertion_sort(T* a, std::size_t n, const KeyFn& key) {
             --j;
         }
         a[j] = v;
+    }
+}
+
+// 叶子插入排序：比较器版本（叶子 double 直比用）。
+template <class T, class LessFn>
+inline void insertion_sort_less(T* a, std::size_t n, const LessFn& less) {
+    for (std::size_t i = 1; i < n; ++i) {
+        T v = a[i];
+        std::size_t j = i;
+        while (j > 0 && less(v, a[j - 1])) {
+            a[j] = a[j - 1];
+            --j;
+        }
+        a[j] = v;
+    }
+}
+
+// 3 元素的专用排序：少循环/少搬移。
+template <class T, class KeyFn>
+inline void sort3(T* a, const KeyFn& key) {
+    std::uint64_t k0 = key(a[0]);
+    std::uint64_t k1 = key(a[1]);
+    std::uint64_t k2 = key(a[2]);
+    if (k1 < k0) {
+        std::swap(a[0], a[1]);
+        std::swap(k0, k1);
+    }
+    if (k2 < k1) {
+        std::swap(a[1], a[2]);
+        std::swap(k1, k2);
+    }
+    if (k1 < k0) {
+        std::swap(a[0], a[1]);
+    }
+}
+
+// 3 元素的专用排序：比较器版本（叶子 double 直比用）。
+template <class T, class LessFn>
+inline void sort3_less(T* a, const LessFn& less) {
+    if (less(a[1], a[0])) {
+        std::swap(a[0], a[1]);
+    }
+    if (less(a[2], a[1])) {
+        std::swap(a[1], a[2]);
+    }
+    if (less(a[1], a[0])) {
+        std::swap(a[0], a[1]);
+    }
+}
+
+// 2 元素：一次比较 + 条件交换（直接比较器版本）。
+template <class T, class LessFn>
+inline void sort2_less(T* a, const LessFn& less) {
+    if (less(a[1], a[0])) {
+        std::swap(a[0], a[1]);
     }
 }
 
@@ -131,12 +200,34 @@ inline bool budgeted_insertion(T* a, std::size_t n, const KeyFn& key,
 
 // 排一个区间。buf 是长度至少 m 的复用缓冲，整棵递归树共用；
 // 计数表目前每个递归节点各分配一次（复用列在路线图里）。
-template <class T, class KeyFn, class Fallback>
+template <class T, class KeyFn, class LessFn, class Fallback>
 void sort_range(T* a, std::size_t m, int depth, const KeyFn& key,
-                const Fallback& fallback, const options& opt, std::vector<T>& buf) {
+                const LessFn& less, bool native_less,
+                const Fallback& fallback, const options& opt,
+                std::vector<T>& buf) {
     if (m < 2) return;
 
-    // 终止：段太小（严格小于 16），或深度到顶。都交给用户提供的比较排序。
+    // 嵌套块：先做一次有序扫描 + 插入测试。
+    // 顶层 xsort_by 已经做过，这里只处理 depth > 0 的递归块。
+    if (depth > 0 && m > opt.scan_threshold) {
+        bool ascending = true;
+        bool descending = true;
+        for (std::size_t i = 1; i < m; ++i) {
+            const std::uint64_t x = key(a[i - 1]);
+            const std::uint64_t y = key(a[i]);
+            if (x > y) ascending = false;
+            if (x < y) descending = false;
+            if (!ascending && !descending) break;
+        }
+        if (ascending) return;
+        if (descending) {
+            std::reverse(a, a + m);
+            return;
+        }
+        if (budgeted_insertion(a, m, key, m / 8)) return;
+    }
+
+    // 终止：段太小（严格小于 small_sort），或深度到顶。
     if (m < opt.small_sort || depth >= opt.max_depth) {
         fallback(a, a + m, [&](const T& x, const T& y) { return key(x) < key(y); });
         return;
@@ -206,17 +297,41 @@ void sort_range(T* a, std::size_t m, int depth, const KeyFn& key,
         const std::uint32_t len = end - begin;
         if (len <= 1) continue;
         if (len < opt.leaf_sort) {
-            // 叶子：严格小于 leaf_sort（默认 22），就地插入。
-            insertion_sort(a + begin, static_cast<std::size_t>(len), key);
+            // 叶子：严格小于 leaf_sort（默认 22）。
+            // native_less（double）用直接浮点比较；通用路径用 key。
+            if (native_less) {
+                if (len == 2) {
+                    sort2_less(a + begin, less);
+                } else if (len == 3) {
+                    sort3_less(a + begin, less);
+                } else {
+                    insertion_sort_less(a + begin, static_cast<std::size_t>(len),
+                                        less);
+                }
+            } else {
+                if (len == 3) {
+                    sort3(a + begin, key);
+                } else {
+                    insertion_sort(a + begin, static_cast<std::size_t>(len), key);
+                }
+            }
         } else if (len < opt.small_sort) {
             // [16, small_sort)：直接本地快排；默认 small_sort=16 时这一档为空。
-            fallback(a + begin, a + end,
-                     [&](const T& x, const T& y) { return key(x) < key(y); });
+            fallback(a + begin, a + end, less);
         } else {
             sort_range(a + begin, static_cast<std::size_t>(len), depth + 1,
-                       key, fallback, opt, buf);
+                       key, less, native_less, fallback, opt, buf);
         }
     }
+}
+
+// 兼容旧调用：只有 key 的版本，等价于 native_less=false。
+template <class T, class KeyFn, class Fallback>
+void sort_range(T* a, std::size_t m, int depth, const KeyFn& key,
+                const Fallback& fallback, const options& opt,
+                std::vector<T>& buf) {
+    auto less = [&](const T& x, const T& y) { return key(x) < key(y); };
+    sort_range(a, m, depth, key, less, false, fallback, opt, buf);
 }
 
 }  // namespace detail
@@ -228,18 +343,18 @@ std::uint64_t key_of(const T& v) noexcept {
     return detail::to_key(v);
 }
 
-// XSort：调度器入口（项目专有名字）。判断交给兜底还是走 OblivoneSort 核心。
-// fallback 在段太小或递归到顶时被调用，默认 std::sort。
-template <class T, class KeyFn, class Fallback = default_fallback>
-void xsort_by(T* data, std::size_t n, KeyFn key,
-              const options& opt = {}, Fallback fallback = Fallback{}) {
+// 内部调度实现：key 负责桶映射，less 负责叶子比较。
+template <class T, class KeyFn, class LessFn, class Fallback = default_fallback>
+void xsort_impl(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
+                bool native_less, const options& opt = {},
+                Fallback fallback = Fallback{}) {
     if (n < 2) return;
     if (n > 0xFFFFFFFFull) {  // 计数表是 32 位
-        fallback(data, data + n, [&](const T& x, const T& y) { return key(x) < key(y); });
+        fallback(data, data + n, less);
         return;
     }
     if (n <= opt.small_sort) {  // 总数 ≤16：不进 Oblivone
-        fallback(data, data + n, [&](const T& x, const T& y) { return key(x) < key(y); });
+        fallback(data, data + n, less);
         return;
     }
 
@@ -264,7 +379,16 @@ void xsort_by(T* data, std::size_t n, KeyFn key,
     if (detail::budgeted_insertion(data, n, key, n / 8)) return;
 
     std::vector<T> buf(n);  // 整棵递归树只分配这一次
-    detail::sort_range(data, n, 0, key, fallback, opt, buf);
+    detail::sort_range(data, n, 0, key, less, native_less, fallback, opt, buf);
+}
+
+// XSort：调度器入口（项目专有名字）。判断交给兜底还是走 OblivoneSort 核心。
+// 默认用 key 比较叶子；double 的 sort/xsort 会改用直接浮点比较。
+template <class T, class KeyFn, class Fallback = default_fallback>
+void xsort_by(T* data, std::size_t n, KeyFn key,
+              const options& opt = {}, Fallback fallback = Fallback{}) {
+    auto less = [&](const T& x, const T& y) { return key(x) < key(y); };
+    xsort_impl(data, n, key, less, false, opt, fallback);
 }
 
 template <class T, class KeyFn, class Fallback = default_fallback>
@@ -284,14 +408,21 @@ void oblivone_sort(T* data, std::size_t n, KeyFn key,
         return;
     }
     std::vector<T> buf(n);
-    detail::sort_range(data, n, 0, key, fallback, opt, buf);
+    auto less = [&](const T& x, const T& y) { return key(x) < key(y); };
+    detail::sort_range(data, n, 0, key, less, false, fallback, opt, buf);
 }
 
 // 算术键的便捷入口（int32/int64/uint32/uint64/float/double）。
 template <class T, class Fallback = default_fallback>
 void xsort(T* data, std::size_t n,
            const options& opt = {}, Fallback fallback = Fallback{}) {
-    xsort_by(data, n, [](const T& v) { return detail::to_key(v); }, opt, fallback);
+    auto key = [](const T& v) { return detail::to_key(v); };
+    if constexpr (std::is_same<T, double>::value) {
+        xsort_impl(data, n, key, detail::less_double, true, opt, fallback);
+    } else {
+        auto less = [&](const T& x, const T& y) { return key(x) < key(y); };
+        xsort_impl(data, n, key, less, false, opt, fallback);
+    }
 }
 
 template <class T, class Fallback = default_fallback>

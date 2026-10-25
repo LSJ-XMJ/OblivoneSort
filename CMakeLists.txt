@@ -40,6 +40,21 @@ target_link_libraries(bench_grid PRIVATE oblivone)
 add_executable(bench_standard bench/bench_standard.cpp)
 target_link_libraries(bench_standard PRIVATE oblivone)
 
+add_executable(bench_tiny bench/bench_tiny.cpp)
+target_link_libraries(bench_tiny PRIVATE oblivone)
+
+add_executable(bench_sort2 bench/bench_sort2.cpp)
+target_link_libraries(bench_sort2 PRIVATE oblivone)
+
+add_executable(bench_nokey bench/bench_nokey.cpp)
+target_link_libraries(bench_nokey PRIVATE oblivone)
+
+add_executable(bench_pair bench/bench_pair.cpp)
+target_link_libraries(bench_pair PRIVATE oblivone)
+
+add_executable(bench_leaf_less bench/bench_leaf_less.cpp)
+target_link_libraries(bench_leaf_less PRIVATE oblivone)
+
 add_executable(bench_known bench/bench_known.cpp)
 target_link_libraries(bench_known PRIVATE oblivone)
 

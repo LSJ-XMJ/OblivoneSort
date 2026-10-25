@@ -391,6 +391,42 @@ void test_nearly_sorted() {
     check("nearly_sorted", v);
 }
 
+void test_nested_ordered_blocks() {
+    const std::size_t blocks = 8;
+    const std::size_t per = 4096;
+    std::vector<double> v;
+    v.reserve(blocks * per);
+    for (std::size_t b = 0; b < blocks; ++b) {
+        for (std::size_t i = 0; i < per; ++i) {
+            v.push_back(static_cast<double>(b) +
+                        static_cast<double>(i) / static_cast<double>(per));
+        }
+    }
+
+    std::mt19937_64 rng(93);
+    std::vector<std::size_t> order(blocks);
+    for (std::size_t i = 0; i < blocks; ++i) order[i] = i;
+    std::shuffle(order.begin(), order.end(), rng);
+
+    std::vector<double> shuffled;
+    shuffled.reserve(v.size());
+    for (const std::size_t b : order) {
+        shuffled.insert(shuffled.end(), v.begin() + static_cast<std::ptrdiff_t>(b * per),
+                        v.begin() + static_cast<std::ptrdiff_t>((b + 1) * per));
+    }
+
+    oblivone::options opt;
+    opt.max_buckets = 16;       // 让每个块跨多个桶，产生大的嵌套组
+    check("nested_sorted_blocks", shuffled, opt);
+
+    std::vector<double> reversed = shuffled;
+    for (std::size_t b = 0; b < blocks; ++b) {
+        std::reverse(reversed.begin() + static_cast<std::ptrdiff_t>(b * per),
+                     reversed.begin() + static_cast<std::ptrdiff_t>((b + 1) * per));
+    }
+    check("nested_reverse_blocks", reversed, opt);
+}
+
 }  // namespace
 
 int main() {
@@ -398,6 +434,7 @@ int main() {
     test_distributions();
     test_orders();
     test_nearly_sorted();
+    test_nested_ordered_blocks();
     test_duplicates();
     test_float_extremes();
     test_int64();

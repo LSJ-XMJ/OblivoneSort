@@ -37,19 +37,23 @@ OblivoneSort 是一个**算位置**而不是**比大小**的排序库：先统�
 - 不是比较排序：键被映射成 `uint64_t`，下标由数值直接算出；
 - 下标数 `m`（当前段长度），平均每组 1 个元素；
 - 位置由**前缀和**精确给出，不依赖估算；
-- 组 ≥22 递归细分；组 <22 用插入排序；深度超限才交给 `std::sort`。
+- 组 ≥22 递归细分；组 <22 用插入排序（组 = 3 用专用排序）；深度超限才交给 `std::sort`。
 
 默认的三档处理：
 
 | 层 | 条件 | 处理 |
 |---|---|---|
 | 调度层 | `n ≤ small_sort`（默认 16） | 交给兜底（默认 `std::sort`） |
-| 核心叶子 | 组 < 22 | **插入排序** |
+| 核心叶子 | 组 < 22 | **插入排序**（double 的 `sort` 用直接 `<` 比较） |
 | 核心递归 | 组 ≥ 22 | 继续 `OblivoneSort` |
+| 嵌套快速路径 | 组 > `scan_threshold`（默认 256） | 先正逆序扫描 + 插入测试，再决定是否递归 |
 | 深度兜底 | `depth ≥ max_depth` | 当前组交给兜底 |
 
 > 关键：**`n > 16` 才进 Oblivone；Oblivone 内部 <22 的组用插入排序，
 > 不会为它再调一次 Oblivone，也不会走 fallback。**
+>
+> `oblivone::sort(double*)` 的叶子比较用 `less_double`（NaN 最后，-0.0==+0.0）；
+> `sort_by` 传自定义 key 时仍用 key 比较，避免破坏用户的顺序定义。
 >
 > 实测（`bench_small`，ns/array）：n<16 时强行“纯 Oblivone”（`leaf_sort=0`，不插入）
 > 比插入慢 3~5 倍：n=4 137 vs 25、n=8 305 vs 76、n=16 592 vs 209。
@@ -155,6 +159,7 @@ oblivone::xsort_by(v, [](const record& r) {
 oblivone::options opt;
 opt.small_sort  = 16;                 // n ≤ 这个值交兜底（默认 16）
 opt.leaf_sort   = 22;                 // 组 < 这个值插入（默认 22）
+opt.scan_threshold = 256;             // 嵌套块 > 此值先做有序扫描/插入测试
 opt.max_depth   = 16;                 // 递归深度上限
 opt.max_buckets = std::size_t(1) << 16;
 oblivone::sort(v, opt);
@@ -226,29 +231,31 @@ ctest --test-dir build --output-on-failure
 
 ## 标准模式（Bentley–McIlroy）
 
-`bench_standard.exe 1000000 5`，1 次预热 + 5 次中位数、绑核，单位 ms：
+`bench_standard.exe 1000000 5 256`，1 次预热 + 5 次中位数、绑核，单位 ms：
 
 | 模式 | `std::sort` | OblivoneSort | 加速 |
 |---|---:|---:|---:|
-| random | 58.2 | 18.8 | 3.10× |
-| sorted | 8.2 | 2.0 | 4.03× |
-| reverse | 6.6 | 2.6 | 2.55× |
-| organ pipe | 31.1 | 19.2 | 1.62× |
-| sawtooth | 18.3 | 9.4 | 1.95× |
-| runs (64) | 50.9 | 21.6 | 2.35× |
-| all equal | 6.4 | 2.1 | 3.03× |
-| few unique | 12.8 | 9.2 | 1.40× |
-| near 0.1% | 8.6 | 1.9 | **4.64×** |
-| near 1% | 8.7 | 2.0 | **4.47×** |
-| near 5% | 9.3 | 2.4 | **3.92×** |
-| push front | 43.6 | 16.3 | 2.67× |
-| push back | 59.1 | 21.3 | 2.77× |
+| random | 69.2 | 18.4 | 3.77× |
+| sorted | 8.7 | 2.1 | 4.07× |
+| reverse | 6.5 | 2.4 | 2.68× |
+| organ pipe | 33.5 | 12.6 | 2.67× |
+| sawtooth | 18.0 | 9.7 | 1.85× |
+| runs (64) | 56.7 | 21.2 | 2.67× |
+| all equal | 7.0 | 2.1 | 3.35× |
+| few unique | 13.9 | 10.6 | 1.32× |
+| near 0.1% | 8.6 | 1.9 | **4.62×** |
+| near 1% | 8.8 | 2.0 | **4.51×** |
+| near 5% | 9.3 | 2.4 | **3.85×** |
+| push front | 42.3 | 10.5 | 4.04× |
+| push back | 47.8 | 14.9 | 3.21× |
 
-- **这组测试暴露了近有序回归**：修复前 near 0.1%/1%/5% 只有 0.47/0.57/0.50×；
+- **近有序回归**：修复前 near 0.1%/1%/5% 只有 0.47/0.57/0.50×；
 - 修复方式：调度器加“带预算的插入排序”快速路径（预算 `n/8` 次搬移），
   完成就返回，超预算中止后继续 Oblivone；
-- 修复后 n=1e7 的 near 0.1%/1%/5% 分别是 **7.40×/5.75×/5.89×**；
-- 仍偏弱：`few unique` 1.40×、`organ pipe` 1.62×；
+- **嵌套扫描**：`scan_threshold=256` 的嵌套正逆序扫描 + 插入测试，
+  把 organ 从 1.62× 提到 2.67×、push 从 2.67/2.77× 提到 4.04/3.21×；
+- 1e7 的 near 0.1%/1%/5% 约 4.4/6.3/3.6×（单次，有波动）；
+- 仍偏弱：`few unique` 1.32×、`sawtooth` 1.85×；
 - 绝对时间受绑核、系统负载影响，和上面“初步基准”的 ns/elem 不要直接混比。
 
 ## 已知排序对比（n=1e6）
@@ -265,27 +272,34 @@ ctest --test-dir build --output-on-failure
 
 | 模式 | 最快 | 最快（ms） | Oblivone（ms） | Oblivone/最快 |
 |---|---|---:|---:|---:|
-| random | **Oblivone** | 17.1 | 17.1 | 1.00 |
-| sorted | TimSort | 0.62 | 2.03 | 3.28 |
-| reverse | TimSort | 0.99 | 2.62 | 2.66 |
-| organ | **TimSort** | 0.99 | 17.69 | **17.8** |
-| sawtooth | pdqsort | 3.69 | 8.57 | 2.32 |
-| runs | **Oblivone** | 20.65 | 20.65 | 1.00 |
-| equal | TimSort | 0.62 | 2.40 | 3.85 |
-| few | pdqsort | 4.85 | 9.21 | 1.90 |
-| near 0.1% | TimSort | 0.66 | 2.03 | 3.09 |
-| near 1% | TimSort | 1.67 | 2.26 | 1.35 |
-| near 5% | **Oblivone** | 2.78 | 2.78 | 1.00 |
-| push front | **TimSort** | 1.22 | 17.96 | **14.7** |
-| push back | **TimSort** | 1.07 | 22.09 | **20.7** |
+| random | **Oblivone** | 18.4 | 18.4 | 1.00 |
+| sorted | TimSort | 0.67 | 2.05 | 3.07 |
+| reverse | TimSort | 1.13 | 2.43 | 2.15 |
+| organ | **TimSort** | 1.27 | 11.93 | **9.42** |
+| sawtooth | pdqsort | 4.33 | 9.81 | 2.27 |
+| runs | pdqsort | 22.62 | 30.85 | 1.36 |
+| equal | TimSort | 0.69 | 2.04 | 2.97 |
+| few | pdqsort | 4.24 | 9.64 | 2.27 |
+| near 0.1% | TimSort | 0.75 | 1.97 | 2.63 |
+| near 1% | TimSort | 1.61 | 1.95 | 1.21 |
+| near 5% | **Oblivone** | 2.33 | 2.33 | 1.00 |
+| push front | **TimSort** | 1.26 | 10.08 | **8.02** |
+| push back | **TimSort** | 1.14 | 15.43 | **13.5** |
 
-n=1e7 趋势一致：random/runs/near5 仍由 Oblivone 胜；
-organ 约 17×、push 约 14~19× 落后于 TimSort；sawtooth 1.33×、few 1.79× 落后于 pdqsort。
+n=1e7 趋势：random（212.9 vs ska 229.7）、runs（227.9 vs ska 249.6）仍由 Oblivone 胜；
+organ 126.9 vs TimSort 13.4（9.4×）、push 126.8/166.8 vs 14.0/14.3（9~12×）；
+sawtooth 106.3 vs pdq 81.7（1.30×）、few 125.3 vs pdq 56.3（2.23×）。
+
+> 新增 `scan_threshold = 256`：嵌套块大于 256 时先做正逆序扫描 + 插入测试。
+> 这把 organ 从 17.8× 降到 9.4×、push 从 14~20× 降到 8~13×；
+> 但 TimSort 在结构化数据上仍然明显更快。runs 的 1e6 结果有波动，
+> 1e7 时 Oblivone 仍领先。
 
 结论（诚实版）：
 
-- **Oblivone 不是“已知最快”**；它只在 random / runs / near5 这类场景领先；
-- **TimSort 在结构化/近有序/push 模式上碾压**（organ、push 差一个数量级）；
+- **Oblivone 不是“已知最快”**；random / near5 稳定领先，runs 视 run 分布
+  （1e7 领先，1e6 与 pdq 接近）；
+- **TimSort 在结构化/近有序/push 模式上仍然明显更快**（organ/push 差 8~13 倍）；
 - **pdqsort 在 few/sawtooth 上更快**；
 - Spreadsort 没有拿过第一，但 sorted/equal 很接近 TimSort；
 - 所以对外只能写“在平滑数值分布、大 n 上有竞争力”，不能写“最快”。
@@ -393,7 +407,7 @@ LSD 基数排序固定做 8 趟（64-bit key），无法利用少值/已排序�
 - `n = 1e4` 的 uint64 少值：**0.92×**；
 - 少值（0~9）：1.05~1.73×，是收益最低的分布之一；
 - `n ≥ 1e5` 内最差约 1.25×（少值，n=1e5）；
-- **对已知排序**：Timsort 在结构化/近有序/push 上更快（organ 17.8×、push 14~20×）；
+- **对已知排序**：Timsort 在结构化/近有序/push 上更快（organ 9.4×、push 8~13×）；
   pdqsort 在 few/sawtooth 上更快；详见下面“已知排序对比”；
 
 ## 正确性
