@@ -1,5 +1,11 @@
 # OblivoneSort
 
+> **English readers:** see [docs/en/README.md](docs/en/README.md) for usage and
+> [docs/en/algorithm.md](docs/en/algorithm.md) for the algorithm overview.
+> The English documents are translations and **may contain errors**;
+> the Chinese documents ([README.md](README.md), [docs/algorithm.md](docs/algorithm.md),
+> [docs/design.md](docs/design.md)) are authoritative.
+
 > **忘一**：忘记自己是一个排序——不去两两比较，而是直接算出每个元素应该在的位置。
 
 OblivoneSort 是一个**算位置**而不是**比大小**的排序库：先统计分布，算出每个元素的下标，用前缀和确定每组的起点，把元素直接搬到对应位置，再对仍然过大的组递归处理，最后用比较排序兜底。
