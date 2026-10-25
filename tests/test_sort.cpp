@@ -368,7 +368,9 @@ void test_pure_oblivone() {
     oblivone::options opt;
     opt.small_sort = 0;
     opt.leaf_sort = 0;
-    oblivone::sort(v.data(), v.size(), opt);
+    oblivone::oblivone_sort(v.data(), v.size(),
+                            [](const double& x) { return oblivone::key_of(x); },
+                            opt);
     if (!is_sorted_by_key(v)) {
         std::printf("FAIL pure oblivone path\n");
         ++g_failures;
@@ -377,12 +379,25 @@ void test_pure_oblivone() {
     std::printf("  pure oblivone: ok\n");
 }
 
+void test_nearly_sorted() {
+    auto v = uniform(50000, 91);
+    std::sort(v.begin(), v.end());
+    std::mt19937_64 rng(92);
+    std::uniform_int_distribution<std::size_t> idx(0, v.size() - 2);
+    for (int k = 0; k < 500; ++k) {
+        const std::size_t i = idx(rng);
+        std::swap(v[i], v[i + 1]);
+    }
+    check("nearly_sorted", v);
+}
+
 }  // namespace
 
 int main() {
     test_size_sweep();
     test_distributions();
     test_orders();
+    test_nearly_sorted();
     test_duplicates();
     test_float_extremes();
     test_int64();

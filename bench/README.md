@@ -32,6 +32,34 @@ g++ -std=c++17 -O2 -I ../include bench_sort.cpp -o bench_sort
   放到 `third_party/pdqsort.h`；CMake 检测到 `third_party/` 会自动加 include 路径。
 - **Boost.Sort**：安装 Boost，`<boost/sort/spreadsort/spreadsort.hpp>` 会被自动识别。
 
+## 标准模式：bench_standard
+
+```powershell
+.\build\bench_standard.exe 1000000 5
+```
+
+Bentley–McIlroy 风格的模式，1 次预热 + 5 次中位数，绑核；单位 ms：
+
+| 模式 | std | Oblivone | 加速 |
+|---|---:|---:|---:|
+| random | 58.2 | 18.8 | 3.10× |
+| sorted | 8.2 | 2.0 | 4.03× |
+| reverse | 6.6 | 2.6 | 2.55× |
+| organ | 31.1 | 19.2 | 1.62× |
+| sawtooth | 18.3 | 9.4 | 1.95× |
+| runs | 50.9 | 21.6 | 2.35× |
+| equal | 6.4 | 2.1 | 3.03× |
+| few | 12.8 | 9.2 | 1.40× |
+| near 0.1% | 8.6 | 1.9 | **4.64×** |
+| near 1% | 8.7 | 2.0 | **4.47×** |
+| near 5% | 9.3 | 2.4 | **3.92×** |
+| push front | 43.6 | 16.3 | 2.67× |
+| push back | 59.1 | 21.3 | 2.77× |
+
+- 近有序在加“带预算插入”之前只有 0.47~0.57×；现在是 3.9~4.6×；
+- n=1e7 时 near 0.1%/1%/5% 是 7.40×/5.75×/5.89×；
+- 仍偏弱：few 1.40×、organ 1.62×。
+
 ## 覆盖矩阵：bench_matrix
 
 ```powershell

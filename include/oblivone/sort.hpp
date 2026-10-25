@@ -105,6 +105,30 @@ inline void insertion_sort(T* a, std::size_t n, const KeyFn& key) {
     }
 }
 
+// 近有序快速路径：带预算的插入排序。
+// 完成返回 true；超过 budget 次搬移则中止并返回 false。
+// 中止时把当前元素放回空位，数组仍是输入的置换，可以继续交给 Oblivone。
+template <class T, class KeyFn>
+inline bool budgeted_insertion(T* a, std::size_t n, const KeyFn& key,
+                               std::size_t budget) {
+    std::size_t moves = 0;
+    for (std::size_t i = 1; i < n; ++i) {
+        T v = a[i];
+        const std::uint64_t kv = key(v);
+        std::size_t j = i;
+        while (j > 0 && kv < key(a[j - 1])) {
+            a[j] = a[j - 1];
+            --j;
+            if (++moves > budget) {
+                a[j] = v;  // 放回空位，保持置换
+                return false;
+            }
+        }
+        a[j] = v;
+    }
+    return true;
+}
+
 // 排一个区间。buf 是长度至少 m 的复用缓冲，整棵递归树共用；
 // 计数表目前每个递归节点各分配一次（复用列在路线图里）。
 template <class T, class KeyFn, class Fallback>
@@ -234,6 +258,10 @@ void xsort_by(T* data, std::size_t n, KeyFn key,
         std::reverse(data, data + n);
         return;
     }
+
+    // 近有序快速路径：带预算的插入排序。
+    // 完成就直接返回；超预算中止后，数据仍是置换，继续走 Oblivone。
+    if (detail::budgeted_insertion(data, n, key, n / 8)) return;
 
     std::vector<T> buf(n);  // 整棵递归树只分配这一次
     detail::sort_range(data, n, 0, key, fallback, opt, buf);

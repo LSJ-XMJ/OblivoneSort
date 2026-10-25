@@ -16,6 +16,10 @@ if(BUILD_TESTING)
   add_executable(test_sort tests/test_sort.cpp)
   target_link_libraries(test_sort PRIVATE oblivone)
   add_test(NAME test_sort COMMAND test_sort)
+
+  add_executable(fuzz_sort tests/fuzz_sort.cpp)
+  target_link_libraries(fuzz_sort PRIVATE oblivone)
+  add_test(NAME fuzz_sort COMMAND fuzz_sort 5000)
 endif()
 
 add_executable(bench_sort bench/bench_sort.cpp)
@@ -32,6 +36,9 @@ target_link_libraries(bench_leaf PRIVATE oblivone)
 
 add_executable(bench_grid bench/bench_grid.cpp)
 target_link_libraries(bench_grid PRIVATE oblivone)
+
+add_executable(bench_standard bench/bench_standard.cpp)
+target_link_libraries(bench_standard PRIVATE oblivone)
 
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
   target_include_directories(bench_sort PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
