@@ -1,7 +1,7 @@
-# Normalize line endings to LF in the repository, on every platform.
+# 所有文本文件在仓库和各个平台上统一使用 LF 换行。
 * text=auto eol=lf
 
-# Binary files (never convert)
+# 二进制文件，不做换行转换。
 *.exe binary
 *.dll binary
 *.lib binary

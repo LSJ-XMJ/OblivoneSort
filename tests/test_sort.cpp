@@ -1,8 +1,7 @@
 // Copyright 2026 肖明杰 (Xiao Mingjie)
 // SPDX-License-Identifier: Apache-2.0
 //
-// Differential tests: every case is compared against std::sort using the
-// same key ordering.
+// 对拍测试：每个用例都用同一套键序与 std::sort 逐元素比较。
 
 #include <oblivone/sort.hpp>
 
@@ -87,7 +86,7 @@ std::vector<double> pareto(std::size_t n, std::uint64_t seed) {
     std::mt19937_64 rng(seed);
     std::uniform_real_distribution<double> u(1e-12, 1.0);
     std::vector<double> v(n);
-    for (auto& x : v) x = std::pow(u(rng), -1.0 / 1.5);  // alpha = 1.5
+    for (auto& x : v) x = std::pow(u(rng), -1.0 / 1.5);  // 帕累托 α = 1.5
     return v;
 }
 
@@ -108,8 +107,7 @@ std::vector<double> few_values(std::size_t n, std::uint64_t seed) {
     return v;
 }
 
-// One extreme outlier with a narrow dense band: the case that defeated the
-// original arc/span design.
+// 单离群点 + 窄区间主体：最容易让“估位置”类算法失手的构造。
 std::vector<double> outlier(std::size_t n, std::uint64_t seed) {
     std::mt19937_64 rng(seed);
     std::uniform_real_distribution<double> d(0.0, 1e-3);
@@ -119,7 +117,7 @@ std::vector<double> outlier(std::size_t n, std::uint64_t seed) {
     return v;
 }
 
-// Self-similar clusters: 64 scales, each a narrow band around 2^-k.
+// 分形：64 个尺度，每簇是 2^-k 附近的窄带。
 std::vector<double> fractal(std::size_t n, std::uint64_t seed) {
     std::mt19937_64 rng(seed);
     std::uniform_real_distribution<double> u(0.0, 1.0);
@@ -132,7 +130,7 @@ std::vector<double> fractal(std::size_t n, std::uint64_t seed) {
     return v;
 }
 
-// Many distinct values packed into an extremely narrow range.
+// 近重复：互不相同但极其接近，随机打乱。
 std::vector<double> near_duplicates(std::size_t n, std::uint64_t seed) {
     std::mt19937_64 rng(seed);
     std::uniform_real_distribution<double> u(-1.0, 1.0);
@@ -140,7 +138,7 @@ std::vector<double> near_duplicates(std::size_t n, std::uint64_t seed) {
     for (std::size_t i = 0; i < n; ++i) {
         v[i] = 1.0 + static_cast<double>(i) * 1e-12 + 1e-15 * u(rng);
     }
-    std::shuffle(v.begin(), v.end(), rng);  // avoid the already-sorted fast path
+    std::shuffle(v.begin(), v.end(), rng);  // 打乱，避免走“已排序”快速路径
     return v;
 }
 
@@ -235,6 +233,15 @@ void test_options() {
     oblivone::options capped;
     capped.max_buckets = 4;
     check("max_buckets=4", v, capped);
+
+    // 退化参数：0 必须按 1 处理，不能下溢；1 也要能正确收敛。
+    oblivone::options zero;
+    zero.max_buckets = 0;
+    check("max_buckets=0", v, zero);
+
+    oblivone::options one;
+    one.max_buckets = 1;
+    check("max_buckets=1", v, one);
 }
 
 struct record {
@@ -269,7 +276,7 @@ void test_adversarial() {
     check("fractal", fractal(n, 22));
     check("near_duplicates", near_duplicates(n, 23));
 
-    // 99.9% in [0, 1], 0.1% far in the tail
+    // 99.9% 在 [0, 1]，0.1% 落在很远的尾部
     std::mt19937_64 rng(24);
     std::uniform_real_distribution<double> d(0.0, 1.0);
     std::vector<double> tail(n);
@@ -278,10 +285,26 @@ void test_adversarial() {
     }
     check("heavy_tail", tail);
 
-    // Force the fallback early: still has to be correct.
+    // 强制提前走兜底，结果仍然必须正确
     oblivone::options shallow;
     shallow.max_depth = 1;
     check("fractal_depth1", fractal(n, 25), shallow);
+}
+
+void test_xsort_entries() {
+    auto v = normal(20000, 31);
+    oblivone::xsort(v);
+    if (!is_sorted_by_key(v)) {
+        std::printf("FAIL xsort entry\n");
+        ++g_failures;
+    }
+
+    auto w = normal(20000, 32);
+    oblivone::xsort_by(w, [](const double& x) { return oblivone::key_of(x); });
+    if (!is_sorted_by_key(w)) {
+        std::printf("FAIL xsort_by entry\n");
+        ++g_failures;
+    }
 }
 
 struct counting_fallback {
@@ -299,7 +322,12 @@ void test_fallback_injection() {
     auto v = normal(50000, 13);
     int calls = 0;
     int elems = 0;
-    oblivone::sort(v.data(), v.size(), oblivone::options{},
+
+    // small_sort=16、leaf_sort=22 时，块 <22 插入，22+ 继续进核心，不一定触发兜底；
+    // 把深度压到 1，强制子块走 fallback，才能验证注入。
+    oblivone::options opt;
+    opt.max_depth = 1;
+    oblivone::sort(v.data(), v.size(), opt,
                    counting_fallback{&calls, &elems});
     if (!is_sorted_by_key(v) || calls <= 0) {
         std::printf("FAIL fallback injection\n");
@@ -317,6 +345,38 @@ void test_fallback_injection() {
     }
 }
 
+void test_small_blocks_insertion() {
+    // 默认 small_sort=16、leaf_sort=22：n>16 进 Oblivone；核心内 <22 的组用插入排序，
+    // 22+ 才继续 Oblivone，所以正常数据不应触发 fallback。
+    auto v = normal(20000, 31);
+    int calls = 0;
+    int elems = 0;
+    oblivone::sort(v.data(), v.size(), oblivone::options{},
+                   counting_fallback{&calls, &elems});
+    if (!is_sorted_by_key(v) || calls != 0) {
+        std::printf("FAIL small blocks use insertion (calls=%d)\n", calls);
+        ++g_failures;
+        return;
+    }
+    std::printf("  small blocks: 0 fallback calls\n");
+}
+
+void test_pure_oblivone() {
+    // leaf_sort=0, small_sort=0：完全不插入，小块也继续 Oblivone；
+    // 靠深度兜底收敛。
+    auto v = uniform(5000, 41);
+    oblivone::options opt;
+    opt.small_sort = 0;
+    opt.leaf_sort = 0;
+    oblivone::sort(v.data(), v.size(), opt);
+    if (!is_sorted_by_key(v)) {
+        std::printf("FAIL pure oblivone path\n");
+        ++g_failures;
+        return;
+    }
+    std::printf("  pure oblivone: ok\n");
+}
+
 }  // namespace
 
 int main() {
@@ -329,7 +389,10 @@ int main() {
     test_options();
     test_sort_by();
     test_fallback_injection();
+    test_small_blocks_insertion();
+    test_pure_oblivone();
     test_adversarial();
+    test_xsort_entries();
 
     if (g_failures == 0) {
         std::printf("all tests passed\n");

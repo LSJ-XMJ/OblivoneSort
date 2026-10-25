@@ -20,3 +20,20 @@ endif()
 
 add_executable(bench_sort bench/bench_sort.cpp)
 target_link_libraries(bench_sort PRIVATE oblivone)
+
+add_executable(bench_matrix bench/bench_matrix.cpp)
+target_link_libraries(bench_matrix PRIVATE oblivone)
+
+add_executable(bench_small bench/bench_small.cpp)
+target_link_libraries(bench_small PRIVATE oblivone)
+
+add_executable(bench_leaf bench/bench_leaf.cpp)
+target_link_libraries(bench_leaf PRIVATE oblivone)
+
+add_executable(bench_grid bench/bench_grid.cpp)
+target_link_libraries(bench_grid PRIVATE oblivone)
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+  target_include_directories(bench_sort PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+  target_include_directories(bench_matrix PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
+endif()
