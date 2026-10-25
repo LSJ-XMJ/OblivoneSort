@@ -4,8 +4,12 @@ on:
   push:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -18,7 +22,7 @@ jobs:
         run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 
       - name: build
-        run: cmake --build build --config Release --parallel
+        run: cmake --build build --config Release
 
       - name: test
         run: ctest --test-dir build -C Release --output-on-failure
