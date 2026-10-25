@@ -40,6 +40,39 @@ target_link_libraries(bench_grid PRIVATE oblivone)
 add_executable(bench_standard bench/bench_standard.cpp)
 target_link_libraries(bench_standard PRIVATE oblivone)
 
+add_executable(bench_known bench/bench_known.cpp)
+target_link_libraries(bench_known PRIVATE oblivone)
+
+find_path(PDQSORT_INCLUDE_DIR pdqsort.h
+  HINTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/pdqsort
+        ${CMAKE_CURRENT_SOURCE_DIR}/build/third_party/pdqsort
+        $ENV{PDQSORT_ROOT})
+find_path(SKA_SORT_INCLUDE_DIR ska_sort.hpp
+  HINTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/ska_sort
+        ${CMAKE_CURRENT_SOURCE_DIR}/build/third_party/ska_sort
+        $ENV{SKA_SORT_ROOT})
+find_path(TIMSORT_INCLUDE_DIR gfx/timsort.hpp
+  HINTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party/cpp-TimSort/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/build/third_party/cpp-TimSort/include
+        $ENV{TIMSORT_ROOT})
+find_path(BOOST_INCLUDE_DIR boost/sort/spreadsort/spreadsort.hpp
+  HINTS $ENV{BOOST_ROOT} $ENV{BOOST_ROOT}/include
+        "D:/VSC_TOOL/boost-1.89.0")
+
+if(PDQSORT_INCLUDE_DIR)
+  target_include_directories(bench_known PRIVATE ${PDQSORT_INCLUDE_DIR})
+endif()
+if(SKA_SORT_INCLUDE_DIR)
+  target_include_directories(bench_known PRIVATE ${SKA_SORT_INCLUDE_DIR})
+endif()
+if(TIMSORT_INCLUDE_DIR)
+  target_include_directories(bench_known PRIVATE ${TIMSORT_INCLUDE_DIR})
+  target_compile_features(bench_known PRIVATE cxx_std_20)
+endif()
+if(BOOST_INCLUDE_DIR)
+  target_include_directories(bench_known PRIVATE ${BOOST_INCLUDE_DIR})
+endif()
+
 if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
   target_include_directories(bench_sort PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)
   target_include_directories(bench_matrix PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party)

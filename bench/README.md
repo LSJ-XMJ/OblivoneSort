@@ -32,6 +32,57 @@ g++ -std=c++17 -O2 -I ../include bench_sort.cpp -o bench_sort
   放到 `third_party/pdqsort.h`；CMake 检测到 `third_party/` 会自动加 include 路径。
 - **Boost.Sort**：安装 Boost，`<boost/sort/spreadsort/spreadsort.hpp>` 会被自动识别。
 
+## 已知排序对比：bench_known
+
+需要官方实现（不随仓库分发）：
+
+- pdqsort：`pdqsort.h`（orlp/pdqsort）
+- ska_sort：`ska_sort.hpp`（skarupke/ska_sort）
+- TimSort：`gfx/timsort.hpp`（gfx/cpp-TimSort，需要 C++20）
+- Boost.Spreadsort：Boost 1.89+ 的 `boost/sort/spreadsort/spreadsort.hpp`
+
+本机放在 `build/third_party/`（被 `.gitignore` 忽略）。CMake 会自动探测
+`build/third_party/` 和 `BOOST_ROOT`，也可以直接：
+
+```powershell
+cmake --build build --config Release --target bench_known
+```
+
+或手工编译（路径按你的机器替换）：
+
+```powershell
+g++ -std=c++20 -O2 -I include `
+  -I build/third_party/pdqsort `
+  -I build/third_party/ska_sort `
+  -I build/third_party/cpp-TimSort/include `
+  -I D:/VSC_TOOL/boost-1.89.0 `
+  bench/bench_known.cpp -o build/bench_known.exe
+```
+
+MSVC 下 `ska_sort.hpp` 会触发编译器内部错误（C1001），`bench_known` 在 MSVC
+会自动跳过 ska 列；g++ 正常。
+
+1e6、绑核、中位数 3 次：
+
+| 模式 | 最快 | 最快 ms | Oblivone ms | Oblivone/最快 |
+|---|---|---:|---:|---:|
+| random | **Oblivone** | 17.1 | 17.1 | 1.00 |
+| sorted | TimSort | 0.62 | 2.03 | 3.28 |
+| reverse | TimSort | 0.99 | 2.62 | 2.66 |
+| organ | **TimSort** | 0.99 | 17.69 | **17.8** |
+| sawtooth | pdqsort | 3.69 | 8.57 | 2.32 |
+| runs | **Oblivone** | 20.65 | 20.65 | 1.00 |
+| equal | TimSort | 0.62 | 2.40 | 3.85 |
+| few | pdqsort | 4.85 | 9.21 | 1.90 |
+| near 0.1% | TimSort | 0.66 | 2.03 | 3.09 |
+| near 1% | TimSort | 1.67 | 2.26 | 1.35 |
+| near 5% | **Oblivone** | 2.78 | 2.78 | 1.00 |
+| push front | **TimSort** | 1.22 | 17.96 | **14.7** |
+| push back | **TimSort** | 1.07 | 22.09 | **20.7** |
+
+结论：**Oblivone 不是已知最快**；Timsort 在结构化/近有序/push 上碾压，
+pdqsort 在 few/sawtooth 上更快，Oblivone 只在 random/runs/near5 领先。
+
 ## 标准模式：bench_standard
 
 ```powershell

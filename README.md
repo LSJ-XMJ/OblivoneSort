@@ -207,6 +207,9 @@ ctest --test-dir build --output-on-failure
 本机：i5-13500H，MinGW g++ 15.2.0，`-O2`，未绑核、未做统计显著性检验，取 3 次最好值。
 `n = 1,000,000`，`max_buckets = 65536`，单位 ns/elem：
 
+> 这一节只对比 `std::sort` 和朴素 radix。对 pdqsort/ska/TimSort 的对比见
+> 下面“已知排序对比”；**Oblivone 不是全局最快**。
+
 | 分布 | `std::sort` | LSD radix | OblivoneSort | 加速（vs std） |
 |---|---:|---:|---:|---:|
 | 均匀 | 56.8 | 41.5 | 19.1 | **2.97×** |
@@ -247,6 +250,48 @@ ctest --test-dir build --output-on-failure
 - 修复后 n=1e7 的 near 0.1%/1%/5% 分别是 **7.40×/5.75×/5.89×**；
 - 仍偏弱：`few unique` 1.40×、`organ pipe` 1.62×；
 - 绝对时间受绑核、系统负载影响，和上面“初步基准”的 ns/elem 不要直接混比。
+
+## 已知排序对比（n=1e6）
+
+同一批数据、同一台机器、绑核，中位数 3 次；官方实现：
+
+- `std::sort`（introsort）
+- `std::stable_sort`
+- **pdqsort**（orlp/pdqsort）
+- **Boost.Spreadsort**（float_sort）
+- **ska_sort**
+- **TimSort**（gfx/cpp-TimSort）
+- OblivoneSort
+
+| 模式 | 最快 | 最快（ms） | Oblivone（ms） | Oblivone/最快 |
+|---|---|---:|---:|---:|
+| random | **Oblivone** | 17.1 | 17.1 | 1.00 |
+| sorted | TimSort | 0.62 | 2.03 | 3.28 |
+| reverse | TimSort | 0.99 | 2.62 | 2.66 |
+| organ | **TimSort** | 0.99 | 17.69 | **17.8** |
+| sawtooth | pdqsort | 3.69 | 8.57 | 2.32 |
+| runs | **Oblivone** | 20.65 | 20.65 | 1.00 |
+| equal | TimSort | 0.62 | 2.40 | 3.85 |
+| few | pdqsort | 4.85 | 9.21 | 1.90 |
+| near 0.1% | TimSort | 0.66 | 2.03 | 3.09 |
+| near 1% | TimSort | 1.67 | 2.26 | 1.35 |
+| near 5% | **Oblivone** | 2.78 | 2.78 | 1.00 |
+| push front | **TimSort** | 1.22 | 17.96 | **14.7** |
+| push back | **TimSort** | 1.07 | 22.09 | **20.7** |
+
+n=1e7 趋势一致：random/runs/near5 仍由 Oblivone 胜；
+organ 约 17×、push 约 14~19× 落后于 TimSort；sawtooth 1.33×、few 1.79× 落后于 pdqsort。
+
+结论（诚实版）：
+
+- **Oblivone 不是“已知最快”**；它只在 random / runs / near5 这类场景领先；
+- **TimSort 在结构化/近有序/push 模式上碾压**（organ、push 差一个数量级）；
+- **pdqsort 在 few/sawtooth 上更快**；
+- Spreadsort 没有拿过第一，但 sorted/equal 很接近 TimSort；
+- 所以对外只能写“在平滑数值分布、大 n 上有竞争力”，不能写“最快”。
+
+> 这组对比也说明：如果目标是“通用最快”，应该把 TimSort/pdqsort 作为调度器的候选；
+> 如果坚持 Oblivone 核心，至少要为“少 run / 结构化”加一个回退策略。
 
 ## 三档阈值（实测）
 
@@ -348,7 +393,8 @@ LSD 基数排序固定做 8 趟（64-bit key），无法利用少值/已排序�
 - `n = 1e4` 的 uint64 少值：**0.92×**；
 - 少值（0~9）：1.05~1.73×，是收益最低的分布之一；
 - `n ≥ 1e5` 内最差约 1.25×（少值，n=1e5）；
-- 还没拿到 pdqsort / spreadsort（网络被拦），比较排序基线只有 `std::sort`；
+- **对已知排序**：Timsort 在结构化/近有序/push 上更快（organ 17.8×、push 14~20×）；
+  pdqsort 在 few/sawtooth 上更快；详见下面“已知排序对比”；
 
 ## 正确性
 
