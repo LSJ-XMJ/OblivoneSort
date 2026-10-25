@@ -104,6 +104,42 @@ inline bool less_double(double a, double b) noexcept {
     return a < b;
 }
 
+// 专用 double 键：只用于“全非负”或“全非正”的数据。
+// 非负：IEEE 位模式本身单调；非正：位模式取反后单调。
+inline std::uint64_t key_nonneg(double v) noexcept {
+    std::uint64_t u;
+    std::memcpy(&u, &v, sizeof(u));
+    return u;
+}
+
+inline std::uint64_t key_nonpos(double v) noexcept {
+    std::uint64_t u;
+    std::memcpy(&u, &v, sizeof(u));
+    return ~u;
+}
+
+enum class double_key_mode { generic, nonneg, nonpos };
+
+// 第一次扫描：遇到混号/NaN 立即放弃，随机数据几乎零成本。
+inline double_key_mode analyze_double_mode(const double* data,
+                                           std::size_t n) noexcept {
+    bool has_neg = false;
+    bool has_pos = false;
+    for (std::size_t i = 0; i < n; ++i) {
+        const double v = data[i];
+        if (v != v) return double_key_mode::generic;
+        std::uint64_t u;
+        std::memcpy(&u, &v, sizeof(u));
+        if (u & 0x8000000000000000ull) {
+            has_neg = true;
+        } else {
+            has_pos = true;
+        }
+        if (has_neg && has_pos) return double_key_mode::generic;
+    }
+    return has_neg ? double_key_mode::nonpos : double_key_mode::nonneg;
+}
+
 // 极小块的插入排序：省掉递归调用和桶表的开销。
 template <class T, class KeyFn>
 inline void insertion_sort(T* a, std::size_t n, const KeyFn& key) {
@@ -418,7 +454,23 @@ void xsort(T* data, std::size_t n,
            const options& opt = {}, Fallback fallback = Fallback{}) {
     auto key = [](const T& v) { return detail::to_key(v); };
     if constexpr (std::is_same<T, double>::value) {
-        xsort_impl(data, n, key, detail::less_double, true, opt, fallback);
+        detail::double_key_mode mode = detail::double_key_mode::generic;
+        if (n >= 1024) mode = detail::analyze_double_mode(data, n);
+        switch (mode) {
+            case detail::double_key_mode::nonneg:
+                xsort_impl(data, n,
+                           [](const double& v) { return detail::key_nonneg(v); },
+                           detail::less_double, true, opt, fallback);
+                break;
+            case detail::double_key_mode::nonpos:
+                xsort_impl(data, n,
+                           [](const double& v) { return detail::key_nonpos(v); },
+                           detail::less_double, true, opt, fallback);
+                break;
+            default:
+                xsort_impl(data, n, key, detail::less_double, true, opt, fallback);
+                break;
+        }
     } else {
         auto less = [&](const T& x, const T& y) { return key(x) < key(y); };
         xsort_impl(data, n, key, less, false, opt, fallback);

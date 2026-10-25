@@ -55,6 +55,10 @@ OblivoneSort 是一个**算位置**而不是**比大小**的排序库：先统�
 > `oblivone::sort(double*)` 的叶子比较用 `less_double`（NaN 最后，-0.0==+0.0）；
 > `sort_by` 传自定义 key 时仍用 key 比较，避免破坏用户的顺序定义。
 >
+> **double 的自适应键**：排序前扫一遍；全非负用 IEEE 位模式、全非正用位取反，
+> 两者都没有符号分支；混号/NaN 回通用 key。全正数据实测约快 **10~18%**，
+> 代价是一次 O(n) 分析；混号数据通常前几个元素就放弃，成本接近 0。
+>
 > 实测（`bench_small`，ns/array）：n<16 时强行“纯 Oblivone”（`leaf_sort=0`，不插入）
 > 比插入慢 3~5 倍：n=4 137 vs 25、n=8 305 vs 76、n=16 592 vs 209。
 > 所以叶子保留插入；`leaf_sort=0` 只作为实验开关。
@@ -272,28 +276,29 @@ ctest --test-dir build --output-on-failure
 
 | 模式 | 最快 | 最快（ms） | Oblivone（ms） | Oblivone/最快 |
 |---|---|---:|---:|---:|
-| random | **Oblivone** | 18.4 | 18.4 | 1.00 |
-| sorted | TimSort | 0.67 | 2.05 | 3.07 |
-| reverse | TimSort | 1.13 | 2.43 | 2.15 |
-| organ | **TimSort** | 1.27 | 11.93 | **9.42** |
-| sawtooth | pdqsort | 4.33 | 9.81 | 2.27 |
-| runs | pdqsort | 22.62 | 30.85 | 1.36 |
-| equal | TimSort | 0.69 | 2.04 | 2.97 |
-| few | pdqsort | 4.24 | 9.64 | 2.27 |
-| near 0.1% | TimSort | 0.75 | 1.97 | 2.63 |
-| near 1% | TimSort | 1.61 | 1.95 | 1.21 |
-| near 5% | **Oblivone** | 2.33 | 2.33 | 1.00 |
-| push front | **TimSort** | 1.26 | 10.08 | **8.02** |
-| push back | **TimSort** | 1.14 | 15.43 | **13.5** |
+| random | **Oblivone** | 18.66 | 18.66 | 1.00 |
+| sorted | TimSort | 0.63 | 2.46 | 3.92 |
+| reverse | TimSort | 1.09 | 2.97 | 2.74 |
+| organ | **TimSort** | 1.07 | 13.59 | **12.70** |
+| sawtooth | pdqsort | 3.66 | 8.21 | 2.25 |
+| runs | ska_sort | 21.66 | 30.01 | 1.39 |
+| equal | TimSort | 0.60 | 1.74 | 2.88 |
+| few | pdqsort | 4.43 | 7.63 | 1.72 |
+| near 0.1% | TimSort | 0.71 | 2.23 | 3.15 |
+| near 1% | TimSort | 1.59 | 2.53 | 1.59 |
+| near 5% | **Oblivone** | 3.06 | 3.06 | 1.00 |
+| push front | **TimSort** | 1.15 | 9.70 | **8.45** |
+| push back | **TimSort** | 1.09 | 14.89 | **13.69** |
 
-n=1e7 趋势：random（212.9 vs ska 229.7）、runs（227.9 vs ska 249.6）仍由 Oblivone 胜；
-organ 126.9 vs TimSort 13.4（9.4×）、push 126.8/166.8 vs 14.0/14.3（9~12×）；
-sawtooth 106.3 vs pdq 81.7（1.30×）、few 125.3 vs pdq 56.3（2.23×）。
+n=1e7：random（217.5 vs ska 278.0）、runs（235.7 vs ska 249.5）、
+near5（33.9 vs TimSort 48.4）仍由 Oblivone 胜；
+organ 158.1 vs TimSort 13.1（12.1×）、push 121.7/155.9 vs 13.5/13.4（9.0/11.6×）；
+sorted 33.8 vs TimSort 6.5（5.2×）、few 101.4 vs pdq 51.5（1.97×）、
+sawtooth 86.6 vs pdq 73.7（1.18×）。
 
-> 新增 `scan_threshold = 256`：嵌套块大于 256 时先做正逆序扫描 + 插入测试。
-> 这把 organ 从 17.8× 降到 9.4×、push 从 14~20× 降到 8~13×；
-> 但 TimSort 在结构化数据上仍然明显更快。runs 的 1e6 结果有波动，
-> 1e7 时 Oblivone 仍领先。
+> 1e6 胜场：TimSort 8/13、pdqsort 2/13、ska_sort 1/13、Oblivone 2/13。
+> 1e7 胜场：TimSort 8/13、pdqsort 2/13、Oblivone 3/13。
+> 单次绑核结果，organ/push/runs 的绝对时间有波动。
 
 结论（诚实版）：
 

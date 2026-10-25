@@ -427,6 +427,33 @@ void test_nested_ordered_blocks() {
     check("nested_reverse_blocks", reversed, opt);
 }
 
+void test_double_key_modes() {
+    const std::size_t n = 5000;
+    std::mt19937_64 rng(94);
+
+    std::vector<double> pos(n), neg(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        pos[i] = static_cast<double>(i) * 0.5;
+        neg[i] = -static_cast<double>(i) * 0.5;
+    }
+    std::shuffle(pos.begin(), pos.end(), rng);
+    std::shuffle(neg.begin(), neg.end(), rng);
+    check("double_nonneg", pos);
+    check("double_nonpos", neg);
+
+    std::vector<double> mixed(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        mixed[i] = (i % 7 == 0) ? -0.0
+                 : (i % 11 == 0) ? 0.0
+                 : (i % 13 == 0) ? std::numeric_limits<double>::quiet_NaN()
+                 : (i % 17 == 0) ? std::numeric_limits<double>::infinity()
+                 : (i % 19 == 0) ? -std::numeric_limits<double>::infinity()
+                 : static_cast<double>(static_cast<int>(i % 100) - 50);
+    }
+    std::shuffle(mixed.begin(), mixed.end(), rng);
+    check("double_mixed_specials", mixed);
+}
+
 }  // namespace
 
 int main() {
@@ -435,6 +462,7 @@ int main() {
     test_orders();
     test_nearly_sorted();
     test_nested_ordered_blocks();
+    test_double_key_modes();
     test_duplicates();
     test_float_extremes();
     test_int64();

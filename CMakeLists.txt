@@ -55,6 +55,9 @@ target_link_libraries(bench_pair PRIVATE oblivone)
 add_executable(bench_leaf_less bench/bench_leaf_less.cpp)
 target_link_libraries(bench_leaf_less PRIVATE oblivone)
 
+add_executable(bench_key_modes bench/bench_key_modes.cpp)
+target_link_libraries(bench_key_modes PRIVATE oblivone)
+
 add_executable(bench_known bench/bench_known.cpp)
 target_link_libraries(bench_known PRIVATE oblivone)
 
