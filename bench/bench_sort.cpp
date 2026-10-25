@@ -68,6 +68,38 @@ std::vector<double> make_few_values(std::size_t n, std::uint64_t seed) {
     return v;
 }
 
+std::vector<double> make_outlier(std::size_t n, std::uint64_t seed) {
+    std::mt19937_64 rng(seed);
+    std::uniform_real_distribution<double> d(0.0, 1e-3);
+    std::vector<double> v(n);
+    for (auto& x : v) x = d(rng);
+    v.back() = 1e9;
+    return v;
+}
+
+std::vector<double> make_fractal(std::size_t n, std::uint64_t seed) {
+    std::mt19937_64 rng(seed);
+    std::uniform_real_distribution<double> u(0.0, 1.0);
+    std::vector<double> v(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        const int k = static_cast<int>(i % 64);
+        const double base = std::pow(2.0, -k);
+        v[i] = base * (1.0 + 1e-9 * u(rng));
+    }
+    return v;
+}
+
+std::vector<double> make_near_duplicates(std::size_t n, std::uint64_t seed) {
+    std::mt19937_64 rng(seed);
+    std::uniform_real_distribution<double> u(-1.0, 1.0);
+    std::vector<double> v(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        v[i] = 1.0 + static_cast<double>(i) * 1e-12 + 1e-15 * u(rng);
+    }
+    std::shuffle(v.begin(), v.end(), rng);  // avoid the already-sorted fast path
+    return v;
+}
+
 void run_case(const char* name, const std::vector<double>& base, std::size_t n,
               std::size_t max_buckets) {
     std::vector<double> a = base;
@@ -116,6 +148,9 @@ int main(int argc, char** argv) {
     run_case("pareto", make_pareto(n, 4), n, max_buckets);
     run_case("bimodal", make_bimodal(n, 5), n, max_buckets);
     run_case("few_values", make_few_values(n, 6), n, max_buckets);
+    run_case("outlier", make_outlier(n, 8), n, max_buckets);
+    run_case("fractal", make_fractal(n, 9), n, max_buckets);
+    run_case("near_dup", make_near_duplicates(n, 10), n, max_buckets);
 
     auto sorted = make_uniform(n, 7);
     std::sort(sorted.begin(), sorted.end());

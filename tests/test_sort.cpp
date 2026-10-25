@@ -108,6 +108,42 @@ std::vector<double> few_values(std::size_t n, std::uint64_t seed) {
     return v;
 }
 
+// One extreme outlier with a narrow dense band: the case that defeated the
+// original arc/span design.
+std::vector<double> outlier(std::size_t n, std::uint64_t seed) {
+    std::mt19937_64 rng(seed);
+    std::uniform_real_distribution<double> d(0.0, 1e-3);
+    std::vector<double> v(n);
+    for (auto& x : v) x = d(rng);
+    v.back() = 1e9;
+    return v;
+}
+
+// Self-similar clusters: 64 scales, each a narrow band around 2^-k.
+std::vector<double> fractal(std::size_t n, std::uint64_t seed) {
+    std::mt19937_64 rng(seed);
+    std::uniform_real_distribution<double> u(0.0, 1.0);
+    std::vector<double> v(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        const int k = static_cast<int>(i % 64);
+        const double base = std::pow(2.0, -k);
+        v[i] = base * (1.0 + 1e-9 * u(rng));
+    }
+    return v;
+}
+
+// Many distinct values packed into an extremely narrow range.
+std::vector<double> near_duplicates(std::size_t n, std::uint64_t seed) {
+    std::mt19937_64 rng(seed);
+    std::uniform_real_distribution<double> u(-1.0, 1.0);
+    std::vector<double> v(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        v[i] = 1.0 + static_cast<double>(i) * 1e-12 + 1e-15 * u(rng);
+    }
+    std::shuffle(v.begin(), v.end(), rng);  // avoid the already-sorted fast path
+    return v;
+}
+
 void test_size_sweep() {
     for (std::size_t n : {0u, 1u, 2u, 3u, 17u, 63u, 64u, 65u, 257u, 1000u, 10000u}) {
         const std::string tag = "uniform(n=" + std::to_string(n) + ")";
@@ -227,6 +263,27 @@ void test_sort_by() {
     }
 }
 
+void test_adversarial() {
+    const std::size_t n = 200000;
+    check("outlier", outlier(n, 21));
+    check("fractal", fractal(n, 22));
+    check("near_duplicates", near_duplicates(n, 23));
+
+    // 99.9% in [0, 1], 0.1% far in the tail
+    std::mt19937_64 rng(24);
+    std::uniform_real_distribution<double> d(0.0, 1.0);
+    std::vector<double> tail(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        tail[i] = (i % 1000 == 0) ? 1e9 + d(rng) : d(rng);
+    }
+    check("heavy_tail", tail);
+
+    // Force the fallback early: still has to be correct.
+    oblivone::options shallow;
+    shallow.max_depth = 1;
+    check("fractal_depth1", fractal(n, 25), shallow);
+}
+
 struct counting_fallback {
     int* calls;
     int* elems;
@@ -272,6 +329,7 @@ int main() {
     test_options();
     test_sort_by();
     test_fallback_injection();
+    test_adversarial();
 
     if (g_failures == 0) {
         std::printf("all tests passed\n");
