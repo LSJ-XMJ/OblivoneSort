@@ -31,6 +31,12 @@ target_link_libraries(bench_matrix PRIVATE oblivone)
 add_executable(bench_small bench/bench_small.cpp)
 target_link_libraries(bench_small PRIVATE oblivone)
 
+add_executable(bench_small_sort bench/bench_small_sort.cpp)
+target_link_libraries(bench_small_sort PRIVATE oblivone)
+
+add_executable(bench_small_top bench/bench_small_top.cpp)
+target_link_libraries(bench_small_top PRIVATE oblivone)
+
 add_executable(bench_leaf bench/bench_leaf.cpp)
 target_link_libraries(bench_leaf PRIVATE oblivone)
 

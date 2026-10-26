@@ -35,8 +35,13 @@ namespace oblivone {
 
 // 参数。默认值见 README；改动时同步更新文档和基准。
 struct options {
-    // 调度层：n ≤ small_sort 交兜底；核心内：组 < leaf_sort 插入，≥ 继续。
+    // 调度层：n ≤ small_top 交兜底；核心内：组 < leaf_sort 插入，≥ 继续。
     std::size_t small_sort = 16;
+
+    // 顶层小数组兜底阈值。与核心的 small_sort 分开：
+    // 顶层可以更早交给 std::sort，而不影响核心组内 16~47 的 fallback 行为。
+    // 48 是低 n 实测的折中：n=24~40 提升 11~20%，n≥56 基本不变。
+    std::size_t small_top = 48;
 
     // 叶子阈值。当前取 22：按 1:1:1:1 权重算出的中位最优值。
     // 如果以后能拿到真实分布概率，应重新标定这个值（见 docs/design.md §7）。
@@ -396,7 +401,7 @@ void xsort_impl(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         fallback(data, data + n, less);
         return;
     }
-    if (n <= opt.small_sort) {  // 总数 ≤16：不进 Oblivone
+    if (n <= opt.small_top) {  // 顶层小数组：不进 Oblivone
         fallback(data, data + n, less);
         return;
     }

@@ -43,13 +43,14 @@ OblivoneSort 是一个**算位置**而不是**比大小**的排序库：先统�
 
 | 层 | 条件 | 处理 |
 |---|---|---|
-| 调度层 | `n ≤ small_sort`（默认 16） | 交给兜底（默认 `std::sort`） |
+| 调度层 | `n ≤ small_top`（默认 48） | 交给兜底（默认 `std::sort`） |
 | 核心叶子 | 组 < 22 | **插入排序**（double 的 `sort` 用直接 `<` 比较） |
 | 核心递归 | 组 ≥ 22 | 继续 `OblivoneSort` |
+| 核心小兜底 | 组 < `small_sort`（默认 16） | 交给兜底；默认 22>16，走不到 |
 | 嵌套快速路径 | 组 > `scan_threshold`（默认 256） | 先正逆序扫描 + 插入测试，再决定是否递归 |
 | 深度兜底 | `depth ≥ max_depth` | 当前组交给兜底 |
 
-> 关键：**`n > 16` 才进 Oblivone；Oblivone 内部 <22 的组用插入排序，
+> 关键：**`n > 48` 才进 Oblivone；Oblivone 内部 <22 的组用插入排序，
 > 不会为它再调一次 Oblivone，也不会走 fallback。**
 >
 > `oblivone::sort(double*)` 的叶子比较用 `less_double`（NaN 最后，-0.0==+0.0）；
@@ -161,7 +162,8 @@ oblivone::xsort_by(v, [](const record& r) {
 
 ```cpp
 oblivone::options opt;
-opt.small_sort  = 16;                 // n ≤ 这个值交兜底（默认 16）
+opt.small_sort  = 16;                 // 核心组 < 这个值交兜底（默认 16）
+opt.small_top   = 48;                 // 顶层 n ≤ 这个值交兜底（默认 48）
 opt.leaf_sort   = 22;                 // 组 < 这个值插入（默认 22）
 opt.scan_threshold = 256;             // 嵌套块 > 此值先做有序扫描/插入测试
 opt.max_depth   = 16;                 // 递归深度上限
