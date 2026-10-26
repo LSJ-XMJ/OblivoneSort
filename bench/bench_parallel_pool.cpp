@@ -227,9 +227,9 @@ int main(int argc, char** argv) {
                    : 65536;
 
     const auto key = [](const double& x) { return oblivone::key_of(x); };
-    std::printf("pattern,n,T,base_ms,pool_ms,ratio\n");
+    std::printf("pattern,n,T,base_ms,pool_ms,percall_ms,pool_ratio,percall_ratio\n");
     const char* names[] = {"random", "few", "organ"};
-    const unsigned Ts[] = {2, 4, 8};
+    const unsigned Ts[] = {2, 4, 6, 8, 12, 16};
 
     for (int p = 0; p < 3; ++p) {
         const auto data = make_pattern(p, n);
@@ -251,15 +251,25 @@ int main(int argc, char** argv) {
             Pool pool(T);
             auto chk = data;
             pool_sort(chk.data(), chk.size(), pool, T, Bcap);
-            if (!std::is_sorted(chk.begin(), chk.end(), less_d)) {
+            auto chk2 = data;
+            {
+                Pool p(T);
+                pool_sort(chk2.data(), chk2.size(), p, T, Bcap);
+            }
+            if (!std::is_sorted(chk.begin(), chk.end(), less_d) ||
+                !std::is_sorted(chk2.begin(), chk2.end(), less_d)) {
                 std::printf("T=%u MISMATCH\n", T);
                 return 2;
             }
             const double tp = median_ms(data, [&](std::vector<double>& v) {
                 pool_sort(v.data(), v.size(), pool, T, Bcap);
             }, reps);
-            std::printf("%s,%zu,%u,%.3f,%.3f,%.3f\n", names[p], n, T, tb, tp,
-                        tp / tb);
+            const double tc = median_ms(data, [&](std::vector<double>& v) {
+                Pool p(T);
+                pool_sort(v.data(), v.size(), p, T, Bcap);
+            }, reps);
+            std::printf("%s,%zu,%u,%.3f,%.3f,%.3f,%.3f,%.3f\n", names[p], n, T,
+                        tb, tp, tc, tp / tb, tc / tb);
         }
     }
     return 0;
