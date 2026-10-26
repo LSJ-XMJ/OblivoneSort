@@ -61,6 +61,15 @@ target_link_libraries(bench_key_modes PRIVATE oblivone)
 add_executable(bench_double_map bench/bench_double_map.cpp)
 target_link_libraries(bench_double_map PRIVATE oblivone)
 
+add_executable(bench_sub_bucket bench/bench_sub_bucket.cpp)
+target_link_libraries(bench_sub_bucket PRIVATE oblivone)
+
+add_executable(bench_offset_tables bench/bench_offset_tables.cpp)
+target_link_libraries(bench_offset_tables PRIVATE oblivone)
+
+add_executable(bench_offset_first bench/bench_offset_first.cpp)
+target_link_libraries(bench_offset_first PRIVATE oblivone)
+
 add_executable(bench_known bench/bench_known.cpp)
 target_link_libraries(bench_known PRIVATE oblivone)
 

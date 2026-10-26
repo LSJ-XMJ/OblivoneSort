@@ -454,6 +454,38 @@ void test_double_key_modes() {
     check("double_mixed_specials", mixed);
 }
 
+void test_core_ordered_inputs() {
+    // 直接调核心（绕过 XSort 的有序检查），最终结果仍必须有序；
+    // 中途 scatter 会打乱局部顺序，但不能破坏正确性。
+    const std::size_t n = 5000;
+    const auto key = [](const double& x) { return oblivone::key_of(x); };
+
+    for (int mode = 0; mode < 4; ++mode) {
+        std::vector<double> v(n);
+        for (std::size_t i = 0; i < n; ++i) v[i] = static_cast<double>(i);
+        if (mode == 1) std::reverse(v.begin(), v.end());
+        if (mode == 2) std::fill(v.begin(), v.end(), 1.0);
+        if (mode == 3) {
+            std::reverse(v.begin() + static_cast<std::ptrdiff_t>(n / 2), v.end());
+        }
+
+        oblivone::options opt;
+        oblivone::oblivone_sort(v.data(), v.size(), key, opt);
+
+        bool ok = true;
+        for (std::size_t i = 1; i < n; ++i) {
+            if (key(v[i]) < key(v[i - 1])) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) {
+            ++g_failures;
+            std::printf("FAIL core_ordered mode=%d\n", mode);
+        }
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -471,6 +503,7 @@ int main() {
     test_fallback_injection();
     test_small_blocks_insertion();
     test_pure_oblivone();
+    test_core_ordered_inputs();
     test_adversarial();
     test_xsort_entries();
 
