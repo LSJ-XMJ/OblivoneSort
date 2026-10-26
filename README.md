@@ -172,7 +172,7 @@ target_link_libraries(app PRIVATE oblivone::parallel)  # 并行，自动链接 T
 
 ## 文档
 
-公开仓库只保留本 README；完整设计记录不随仓库发布。
+公开仓库只保留本 README；完整设计讨论记录不随仓库发布，毕竟这个代码逻辑足够简单了，如果有特别需要，私信后，我会整理对应文档。
 
 ## 作者
 
