@@ -1,7 +1,6 @@
-// Experimental parallel API correctness tests.
-// This is test-mod code, not the final parallel API.
+// Parallel API correctness tests.
 
-#include <oblivone/parallel_experimental.hpp>
+#include <oblivone/parallel.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -23,10 +22,10 @@ bool sorted_by_key(const std::vector<T>& v) {
 
 template <class T>
 void check(const char* name, std::vector<T> v, unsigned threads) {
-    oblivone::experimental::parallel_options popt;
+    oblivone::parallel_options popt;
     popt.threads = threads;
     popt.min_n = 1000;
-    oblivone::experimental::parallel_sort(v, oblivone::options{}, popt);
+    oblivone::parallel_sort(v, oblivone::options{}, popt);
     if (!sorted_by_key(v)) {
         std::printf("FAIL %s threads=%u\n", name, threads);
         ++g_failures;
@@ -45,10 +44,10 @@ void test_items() {
     std::vector<Item> v(n);
     for (auto& x : v) x = Item{d(rng), 0.0};
 
-    oblivone::experimental::parallel_options popt;
+    oblivone::parallel_options popt;
     popt.threads = 4;
     popt.min_n = 1000;
-    oblivone::experimental::parallel_sort_by(
+    oblivone::parallel_sort_by(
         v, [](const Item& x) {
             return static_cast<std::uint64_t>(
                        static_cast<std::int64_t>(x.key)) ^
@@ -93,6 +92,19 @@ int main() {
 
     std::vector<double> empty;
     check("empty", empty, 4);
+
+    {
+        oblivone::thread_pool pool(2);
+        oblivone::parallel_options popt;
+        popt.pool = &pool;
+        popt.min_n = 1000;
+        auto v = random;
+        oblivone::parallel_sort(v, oblivone::options{}, popt);
+        if (!sorted_by_key(v)) {
+            std::printf("FAIL injected pool\n");
+            ++g_failures;
+        }
+    }
 
     test_items();
 

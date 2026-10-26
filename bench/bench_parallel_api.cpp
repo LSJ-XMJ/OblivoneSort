@@ -1,7 +1,7 @@
-// Benchmark the experimental parallel API.
+// Benchmark the parallel API.
 // Usage: bench_parallel_api [n] [reps] [threads]
 
-#include <oblivone/parallel_experimental.hpp>
+#include <oblivone/parallel.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -67,10 +67,10 @@ int main(int argc, char** argv) {
         oblivone::oblivone_sort(serial.data(), serial.size(), key,
                                 oblivone::options{});
         auto par = data;
-        oblivone::experimental::parallel_options popt;
+        oblivone::parallel_options popt;
         popt.threads = threads;
         popt.min_n = 1000000;
-        oblivone::experimental::parallel_sort(par, oblivone::options{}, popt);
+        oblivone::parallel_sort(par, oblivone::options{}, popt);
         if (!std::is_sorted(serial.begin(), serial.end(), less_d) ||
             !std::is_sorted(par.begin(), par.end(), less_d)) {
             std::printf("MISMATCH\n");
@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
             oblivone::oblivone_sort(v.data(), v.size(), key, oblivone::options{});
         }, reps);
         const double tp = median_ms(data, [&](std::vector<double>& v) {
-            oblivone::experimental::parallel_sort(v, oblivone::options{}, popt);
+            oblivone::parallel_sort(v, oblivone::options{}, popt);
         }, reps);
         std::printf("%s,%zu,%u,%.3f,%.3f,%.3f\n", names[p], n, threads, ts, tp,
                     tp / ts);

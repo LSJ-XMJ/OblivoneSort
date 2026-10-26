@@ -196,46 +196,58 @@ oblivone::oblivone_sort(v.data(), v.size(),
 | `oblivone::xsort` / `xsort_by` | XSort 调度器（项目专有名） |
 | `oblivone::sort` / `sort_by` | 标准别名，按 `std` 习惯调用 |
 | `oblivone::oblivone_sort` | OblivoneSort 核心（项目专有名） |
+| `oblivone::parallel_sort` / `parallel_sort_by` | 可选并行入口（独立头文件） |
+| `oblivone::thread_pool` | 可注入的并行线程池 |
 | `oblivone::options` / `key_of` / `default_fallback` | 通用名 |
 | `oblivone::detail::*` | 内部实现，不属于公共 API |
 
-## 实验性并行 API（test mod，非最终版）
+## 并行 API
 
-> **这不是最终并行 API。** 最终版会从零重写；当前代码只用于验证方向和收集数据。
-> 它放在独立头文件里，不进入 `sort.hpp`，也不改变默认 `sort` 行为。
+并行实现放在独立头文件；核心 `sort.hpp` 不依赖 `<thread>`，默认 `sort` 行为不变。
 
 ```cpp
-#include <oblivone/parallel_experimental.hpp>
+#include <oblivone/parallel.hpp>
 
-oblivone::experimental::parallel_options popt;
-popt.threads = 4;        // 0 = 自动
-popt.min_n = 1000000;    // 小于此值走串行
+oblivone::parallel_options popt;
+popt.threads = 12;       // 0 = 自动
+popt.min_n = 2000000;    // 小 n 走串行
 popt.max_buckets = 65536;
 
-oblivone::experimental::parallel_sort(v, oblivone::options{}, popt);
+oblivone::parallel_sort(v, oblivone::options{}, popt);
+```
+
+也可以注入常驻线程池：
+
+```cpp
+oblivone::thread_pool pool(12);
+oblivone::parallel_options popt;
+popt.pool = &pool;
+oblivone::parallel_sort(v, oblivone::options{}, popt);
 ```
 
 默认：
 
 - `threads=0`：n<1e7 自动用 4，n≥1e7 用 12（上限 hardware）；
-- `min_n=1e6`；
+- `min_n=2e6`：1e6 few/organ 并行会回退，默认串行；
 - 每线程计数表上限 64K，避免 T×1M 表爆内存。
 
-实测（相对同库单线程 core）：
+实测（相对同库单线程 core；1e6 行显式设 `min_n=1e6`）：
 
 | n | threads | random | few | organ |
 |---:|---:|---:|---:|---:|
-| 1e6 | 4 | 0.62× | 0.99~1.08× | 0.95~1.14× |
-| 1e7 | 12 | 0.32~0.37× | 0.54~0.60× | 0.57~0.73× |
-| 2e7 | 12 | 0.35× | 0.54× | 0.73× |
+| 1e6 | 4 | 0.66× | 1.11× | 1.19× |
+| 1e7 | 12 | 0.35× | 0.56× | 0.67× |
+| 2e7 | 12 | 0.34× | 0.55× | 0.69× |
 
 限制：
 
-- 每调用创建线程，1e6 的 few/organ 可能持平或回退；
 - 每线程 scratch 为 `max_group`，大组会吃内存；
-- 没有 TSan/并发 fuzz，只有 `is_sorted` 测试；
-- 并发调用同一个 pool 未支持；
-- 最终版需要线程池/scratch 池/API 重写。
+- 未注入 pool 时每次调用创建/销毁线程；
+- 一个 `thread_pool` 的 `run()` 串行化，不保证并发提交；
+- 还没有 TSan/并发 fuzz；
+- `parallel_experimental.hpp` 仅保留为兼容转发，已废弃。
+
+详见 [docs/parallel.md](docs/parallel.md)。
 
 ## 构建与测试
 
