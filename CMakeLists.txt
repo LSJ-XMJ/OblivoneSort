@@ -70,6 +70,9 @@ target_link_libraries(bench_offset_tables PRIVATE oblivone)
 add_executable(bench_offset_first bench/bench_offset_first.cpp)
 target_link_libraries(bench_offset_first PRIVATE oblivone)
 
+add_executable(bench_offset_hybrid bench/bench_offset_hybrid.cpp)
+target_link_libraries(bench_offset_hybrid PRIVATE oblivone)
+
 add_executable(bench_known bench/bench_known.cpp)
 target_link_libraries(bench_known PRIVATE oblivone)
 
