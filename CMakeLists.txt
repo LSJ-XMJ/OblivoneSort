@@ -89,6 +89,9 @@ find_package(Threads REQUIRED)
 add_executable(bench_parallel bench/bench_parallel.cpp)
 target_link_libraries(bench_parallel PRIVATE oblivone Threads::Threads)
 
+add_executable(bench_parallel_pool bench/bench_parallel_pool.cpp)
+target_link_libraries(bench_parallel_pool PRIVATE oblivone Threads::Threads)
+
 add_executable(bench_offset_hybrid bench/bench_offset_hybrid.cpp)
 target_link_libraries(bench_offset_hybrid PRIVATE oblivone)
 
