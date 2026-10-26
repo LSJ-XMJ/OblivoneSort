@@ -172,14 +172,7 @@ target_link_libraries(app PRIVATE oblivone::parallel)  # 并行，自动链接 T
 
 ## 文档
 
-- [doc/README.md](doc/README.md)
-- [算法与代码逻辑](doc/algorithm.md)
-- [API 与参数](doc/api-and-parameters.md)
-- [并行设计](doc/parallel.md)
-- [测试](doc/testing.md)
-- [基准](doc/benchmarks.md)
-- [设计决策与负结果](doc/decisions.md)
-- [发布清单](doc/release.md)
+公开仓库只保留本 README；完整设计记录不随仓库发布。
 
 ## 作者
 
