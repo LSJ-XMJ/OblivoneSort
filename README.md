@@ -437,7 +437,8 @@ LSD 基数排序固定做 8 趟（64-bit key），无法利用少值/已排序�
 - 额外内存：典型 `O(n)`；最坏 `O(n · max_depth)`（每层计数表同时存活）。
 
 完整推导、伪代码、边界清单见 [docs/design.md](docs/design.md)；
-不涉及代码、只讲逻辑的版本见 [docs/algorithm.md](docs/algorithm.md)。
+不涉及代码、只讲逻辑的版本见 [docs/algorithm.md](docs/algorithm.md)；
+对“为什么结构化数据会输”的系统讨论见 [docs/weakness.md](docs/weakness.md)。
 
 ## 路线图
 

@@ -68,6 +68,34 @@ g++ -std=c++17 -O2 -I ../include bench_sort.cpp -o bench_sort
 `raw <` 4.4 vs key 9.4 说明成本主要在 `key()`（double→uint64）转换，
 不在比较/交换。之前 0.5× 的结论是小样本测量偏差；n=2 继续用插入排序。
 
+## 纯 double 桶映射：bench_double_map（失败）
+
+```powershell
+.\build\bench_double_map.exe 10000000 3
+```
+
+同一份 random 数据：
+
+- key core：当前 `oblivone_sort`，uint64 key + 整数桶号；
+- double core：完全不用 key，直接 `(x-mn)*scale` 算桶号。
+
+| n | key core | double core | 结果 |
+|---:|---:|---:|---:|
+| 1e6 | 17.8~20.3 ms | 19.0~24.4 ms | double 慢 6~23% |
+| 1e7 | 191~196 ms | 279~286 ms | **double 慢约 46%** |
+
+double core 统计：`nodes=410, sum_m=1.0009n, max_depth=1, fallback=0`，
+分布正常，不是递归/桶分布 bug。
+
+结论：
+
+- “去掉 key 转换”并不等于更快；
+- key 路径的 `(k-mn)*scale` 是整数减法 + 一次 int→double，
+  比纯 double 的 `(x-mn)*scale` 更快；
+- 之前 32.8% 的“key 转换开销”是对 `uint64` 直排的上界，
+  真正换成 double 桶映射后，浮点减法/乘法的延迟把它吃掉了；
+- **不集成**，保留当前 key 路径。
+
 ## 自适应 key 模式：bench_key_modes
 
 ```powershell
@@ -163,6 +191,44 @@ g++ -std=c++17 -O2 -I ../include bench_sort.cpp -o bench_sort
 - 结论：**预计算键“一直使用”在普通 `(key,value)` 布局下不划算**；
   当前“重复 key() + 8 字节搬移”反而更好。
 - 如果键本来就有（例如直接排 uint64），那就不存在这笔转换成本。
+
+## 混合实验：bench_hybrid（TEST ONLY）
+
+```powershell
+.\build\bench_hybrid.exe 10000000 2
+```
+
+规则：
+
+- 块 > T：用 `oblivone_sort` 核心递归分桶（含嵌套）；
+- 块 ≤ T：不处理；
+- 全部处理完，对整数组跑 `gfx::timsort`；
+- 与纯 TimSort 对比。
+
+1e7、绑核，ratio = hybrid / 纯 TimSort：
+
+| 模式 | 纯 TimSort | T=64 | T=8192 | T=n |
+|---|---:|---:|---:|---:|
+| random | 1008.2 ms | **254.2 ms (0.252)** | 631.7 (0.627) | 1033.0 (1.025) |
+| few | 183.0 ms | 103.1 ms (0.563) | 102.4 (0.559) | 203.8 (1.113) |
+| sorted | 7.54 ms | 159.3 ms (21.1) | 85.1 (11.3) | 25.6 (3.40) |
+| organ | 12.42 ms | 201.9 ms (16.3) | 87.3 (7.03) | 31.5 (2.54) |
+| push front | 13.18 ms | 156.6 ms (11.9) | 86.2 (6.54) | 33.6 (2.55) |
+| near 5% | 40.20 ms | 175.2 ms (4.36) | 116.8 (2.90) | 60.1 (1.50) |
+
+1e6 趋势一致：random 最好 T≈64（0.255×），few 在 T≈64~128（0.56~0.57×），
+sorted/organ/push 在所有 T 下都显著慢于纯 TimSort。
+
+结论：
+
+- T 的适用范围只在 **random / few**；
+- random：T 在 **32~1024** 都接近最优，**T=64** 最稳；T≥2048 开始退化；
+- few：T 范围很宽（0~8192 都在 0.55~0.65），T≈64~128；
+- **结构化数据不要用**：T=0~8192 全部比纯 TimSort 慢 2.5~41×；
+  T=n 也慢 1.5~3.4×，因为核心仍分配了 `buf`；
+- 对 random，hybrid 仍比**纯 Oblivone** 慢（1e7：254 vs 217.5 ms；1e6：22.8 vs 18.7 ms）；
+- hybrid **不稳定**：Oblivone 分桶已经打乱相等元素顺序，最后跑 TimSort 也恢复不了；
+  需要稳定排序时不能用它替代 TimSort。
 
 ## 已知排序对比：bench_known
 

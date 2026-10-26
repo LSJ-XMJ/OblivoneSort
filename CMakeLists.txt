@@ -58,6 +58,9 @@ target_link_libraries(bench_leaf_less PRIVATE oblivone)
 add_executable(bench_key_modes bench/bench_key_modes.cpp)
 target_link_libraries(bench_key_modes PRIVATE oblivone)
 
+add_executable(bench_double_map bench/bench_double_map.cpp)
+target_link_libraries(bench_double_map PRIVATE oblivone)
+
 add_executable(bench_known bench/bench_known.cpp)
 target_link_libraries(bench_known PRIVATE oblivone)
 
@@ -86,6 +89,12 @@ endif()
 if(TIMSORT_INCLUDE_DIR)
   target_include_directories(bench_known PRIVATE ${TIMSORT_INCLUDE_DIR})
   target_compile_features(bench_known PRIVATE cxx_std_20)
+
+  # TEST ONLY: hybrid requires the third-party TimSort header.
+  add_executable(bench_hybrid bench/bench_hybrid.cpp)
+  target_link_libraries(bench_hybrid PRIVATE oblivone)
+  target_include_directories(bench_hybrid PRIVATE ${TIMSORT_INCLUDE_DIR})
+  target_compile_features(bench_hybrid PRIVATE cxx_std_20)
 endif()
 if(BOOST_INCLUDE_DIR)
   target_include_directories(bench_known PRIVATE ${BOOST_INCLUDE_DIR})
