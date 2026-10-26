@@ -74,6 +74,23 @@ struct options {
 struct default_fallback {
     template <class T, class Cmp>
     void operator()(T* first, T* last, Cmp comp) const {
+        const auto n = last - first;
+        // 算术类型的小段：插入比 std::sort 快（低 n 实测到 ~96）。
+        // 只对默认 fallback 生效，用户注入的 fallback 不受影响。
+        if constexpr (std::is_arithmetic<T>::value) {
+            if (n <= 96) {
+                for (T* i = first + 1; i < last; ++i) {
+                    T v = *i;
+                    T* j = i;
+                    while (j > first && comp(v, *(j - 1))) {
+                        *j = *(j - 1);
+                        --j;
+                    }
+                    *j = v;
+                }
+                return;
+            }
+        }
         std::sort(first, last, comp);
     }
 };

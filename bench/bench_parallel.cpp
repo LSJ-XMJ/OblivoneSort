@@ -4,6 +4,7 @@
 #include <oblivone/sort.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
@@ -33,7 +34,8 @@ std::vector<double> make_pattern(int p, std::size_t n) {
     return v;
 }
 
-void parallel_root(double* a, std::size_t n, unsigned T, std::size_t Bcap) {
+void parallel_root(double* a, std::size_t n, unsigned T, std::size_t Bcap,
+                   bool parallel_groups = false) {
     if (n < 2) return;
     if (T <= 1) {
         const auto key = [](const double& x) { return oblivone::key_of(x); };
@@ -84,11 +86,13 @@ void parallel_root(double* a, std::size_t n, unsigned T, std::size_t Bcap) {
         for (std::size_t b = 0; b < B; ++b) total[b] += local[t][b];
     }
     std::vector<std::uint32_t> start(B, 0), end(B, 0);
+    std::size_t max_group = 0;
     std::uint32_t running = 0;
     for (std::size_t b = 0; b < B; ++b) {
         start[b] = running;
         running += total[b];
         end[b] = running;
+        if (total[b] > max_group) max_group = total[b];
     }
 
     std::vector<std::vector<std::uint32_t>> off(
@@ -135,9 +139,10 @@ void parallel_root(double* a, std::size_t n, unsigned T, std::size_t Bcap) {
     const auto less = [](const double& x, const double& y) { return less_d(x, y); };
     oblivone::options opt;
     oblivone::default_fallback fb;
-    for (std::size_t b = 0; b < B; ++b) {
+
+    auto process_group = [&](std::size_t b, std::vector<double>& scratch) {
         const std::uint32_t len = end[b] - start[b];
-        if (len < 2) continue;
+        if (len < 2) return;
         if (len < opt.leaf_sort) {
             if (len == 3) {
                 std::uint64_t k0 = keyd(a[start[b]]);
@@ -160,8 +165,26 @@ void parallel_root(double* a, std::size_t n, unsigned T, std::size_t Bcap) {
             }
         } else {
             oblivone::detail::sort_range(a + start[b], len, 1, key, less, false,
-                                         fb, opt, buf);
+                                         fb, opt, scratch);
         }
+    };
+
+    if (!parallel_groups) {
+        for (std::size_t b = 0; b < B; ++b) process_group(b, buf);
+    } else {
+        std::atomic<std::size_t> next{0};
+        for (unsigned t = 0; t < T; ++t) {
+            threads.emplace_back([&] {
+                std::vector<double> scratch(max_group);
+                for (;;) {
+                    const std::size_t b = next.fetch_add(1, std::memory_order_relaxed);
+                    if (b >= B) break;
+                    process_group(b, scratch);
+                }
+            });
+        }
+        for (auto& th : threads) th.join();
+        threads.clear();
     }
 }
 
@@ -191,7 +214,7 @@ int main(int argc, char** argv) {
                    : 65536;
 
     const auto key = [](const double& x) { return oblivone::key_of(x); };
-    std::printf("pattern,n,T,base_ms,par_ms,ratio\n");
+    std::printf("pattern,n,T,base_ms,root_ms,full_ms,root_ratio,full_ratio\n");
     const char* names[] = {"random", "few", "organ"};
     const unsigned Ts[] = {1, 2, 4, 8};
 
@@ -213,20 +236,27 @@ int main(int argc, char** argv) {
 
         for (const unsigned T : Ts) {
             if (T == 1) {
-                std::printf("%s,%zu,%u,%.3f,%.3f,1.000\n", names[p], n, T, tb, tb);
+                std::printf("%s,%zu,%u,%.3f,%.3f,%.3f,1.000,1.000\n", names[p], n,
+                            T, tb, tb, tb);
                 continue;
             }
-            auto chk = data;
-            parallel_root(chk.data(), chk.size(), T, Bcap);
-            if (!std::is_sorted(chk.begin(), chk.end(), less_d)) {
+            auto chk_root = data;
+            parallel_root(chk_root.data(), chk_root.size(), T, Bcap, false);
+            auto chk_full = data;
+            parallel_root(chk_full.data(), chk_full.size(), T, Bcap, true);
+            if (!std::is_sorted(chk_root.begin(), chk_root.end(), less_d) ||
+                !std::is_sorted(chk_full.begin(), chk_full.end(), less_d)) {
                 std::printf("T=%u MISMATCH\n", T);
                 return 2;
             }
-            const double tp = median_ms(data, [&](std::vector<double>& v) {
-                parallel_root(v.data(), v.size(), T, Bcap);
+            const double tr = median_ms(data, [&](std::vector<double>& v) {
+                parallel_root(v.data(), v.size(), T, Bcap, false);
             }, reps);
-            std::printf("%s,%zu,%u,%.3f,%.3f,%.3f\n", names[p], n, T, tb, tp,
-                        tp / tb);
+            const double tf = median_ms(data, [&](std::vector<double>& v) {
+                parallel_root(v.data(), v.size(), T, Bcap, true);
+            }, reps);
+            std::printf("%s,%zu,%u,%.3f,%.3f,%.3f,%.3f,%.3f\n", names[p], n, T,
+                        tb, tr, tf, tr / tb, tf / tb);
         }
     }
     return 0;
