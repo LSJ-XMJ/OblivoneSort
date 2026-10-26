@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "If you use OblivoneSort in academic work, please cite this repository."
+title: "OblivoneSort"
+abstract: "A C++17 header-only distribution sort: order-preserving keys, direct bucket mapping, prefix sums, scatter, and optional parallel root/group processing."
+authors:
+  - name: "肖明杰 (Xiao Mingjie)"
+repository-code: "https://github.com/LSJ-XMJ/OblivoneSort"
+license: "Apache-2.0"
+keywords:
+  - "sorting"
+  - "distribution sort"
+  - "header-only"
+  - "C++17"
