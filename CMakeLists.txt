@@ -12,6 +12,7 @@ else()
 endif()
 
 include(CTest)
+find_package(Threads REQUIRED)
 if(BUILD_TESTING)
   add_executable(test_sort tests/test_sort.cpp)
   target_link_libraries(test_sort PRIVATE oblivone)
@@ -20,6 +21,10 @@ if(BUILD_TESTING)
   add_executable(fuzz_sort tests/fuzz_sort.cpp)
   target_link_libraries(fuzz_sort PRIVATE oblivone)
   add_test(NAME fuzz_sort COMMAND fuzz_sort 5000)
+
+  add_executable(test_parallel tests/test_parallel.cpp)
+  target_link_libraries(test_parallel PRIVATE oblivone Threads::Threads)
+  add_test(NAME test_parallel COMMAND test_parallel)
 endif()
 
 add_executable(bench_sort bench/bench_sort.cpp)
@@ -91,6 +96,9 @@ target_link_libraries(bench_parallel PRIVATE oblivone Threads::Threads)
 
 add_executable(bench_parallel_pool bench/bench_parallel_pool.cpp)
 target_link_libraries(bench_parallel_pool PRIVATE oblivone Threads::Threads)
+
+add_executable(bench_parallel_api bench/bench_parallel_api.cpp)
+target_link_libraries(bench_parallel_api PRIVATE oblivone Threads::Threads)
 
 add_executable(bench_offset_hybrid bench/bench_offset_hybrid.cpp)
 target_link_libraries(bench_offset_hybrid PRIVATE oblivone)

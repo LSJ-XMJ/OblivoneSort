@@ -199,6 +199,44 @@ oblivone::oblivone_sort(v.data(), v.size(),
 | `oblivone::options` / `key_of` / `default_fallback` | 通用名 |
 | `oblivone::detail::*` | 内部实现，不属于公共 API |
 
+## 实验性并行 API（test mod，非最终版）
+
+> **这不是最终并行 API。** 最终版会从零重写；当前代码只用于验证方向和收集数据。
+> 它放在独立头文件里，不进入 `sort.hpp`，也不改变默认 `sort` 行为。
+
+```cpp
+#include <oblivone/parallel_experimental.hpp>
+
+oblivone::experimental::parallel_options popt;
+popt.threads = 4;        // 0 = 自动
+popt.min_n = 1000000;    // 小于此值走串行
+popt.max_buckets = 65536;
+
+oblivone::experimental::parallel_sort(v, oblivone::options{}, popt);
+```
+
+默认：
+
+- `threads=0`：n<1e7 自动用 4，n≥1e7 用 12（上限 hardware）；
+- `min_n=1e6`；
+- 每线程计数表上限 64K，避免 T×1M 表爆内存。
+
+实测（相对同库单线程 core）：
+
+| n | threads | random | few | organ |
+|---:|---:|---:|---:|---:|
+| 1e6 | 4 | 0.62× | 0.99~1.08× | 0.95~1.14× |
+| 1e7 | 12 | 0.32~0.37× | 0.54~0.60× | 0.57~0.73× |
+| 2e7 | 12 | 0.35× | 0.54× | 0.73× |
+
+限制：
+
+- 每调用创建线程，1e6 的 few/organ 可能持平或回退；
+- 每线程 scratch 为 `max_group`，大组会吃内存；
+- 没有 TSan/并发 fuzz，只有 `is_sorted` 测试；
+- 并发调用同一个 pool 未支持；
+- 最终版需要线程池/scratch 池/API 重写。
+
 ## 构建与测试
 
 ```bash
