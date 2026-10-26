@@ -125,6 +125,9 @@ struct parallel_options {
     // Per-thread bucket tables are capped to keep T * B memory bounded.
     // 0 = no extra cap (not recommended).
     std::size_t max_buckets = 65536;
+    // Scratch budget in bytes for depth-1 group sorting.
+    // 0 = n * sizeof(T) (about one full serial scratch buffer).
+    std::size_t scratch_budget = 0;
     // Optional user-owned pool.  If null, a temporary pool is created.
     thread_pool* pool = nullptr;
 };
@@ -264,27 +267,48 @@ void impl(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
                   buf.begin() + static_cast<std::ptrdiff_t>(hi), data + lo);
     });
 
-    std::atomic<std::size_t> next{0};
-    pool->run(nthreads, [&](unsigned) {
-        std::vector<T> scratch(max_group);
-        for (;;) {
-            const std::size_t b = next.fetch_add(1, std::memory_order_relaxed);
-            if (b >= B) break;
-            const std::uint32_t len = end[b] - start[b];
-            if (len > 1) {
-                if (len < opt.leaf_sort) {
-                    if (native_less) {
-                        detail::insertion_sort_less(data + start[b], len, less);
-                    } else {
-                        detail::insertion_sort(data + start[b], len, key);
-                    }
-                } else {
-                    detail::sort_range(data + start[b], len, 1, key, less,
-                                       native_less, fallback, opt, scratch);
-                }
+    auto process_group = [&](std::size_t b, std::vector<T>& scratch) {
+        const std::uint32_t len = end[b] - start[b];
+        if (len < 2) return;
+        if (len < opt.leaf_sort) {
+            if (native_less) {
+                detail::insertion_sort_less(data + start[b], len, less);
+            } else {
+                detail::insertion_sort(data + start[b], len, key);
             }
+        } else {
+            detail::sort_range(data + start[b], len, 1, key, less, native_less,
+                               fallback, opt, scratch);
         }
-    });
+    };
+
+    // Bound scratch memory: group_threads * max_group * sizeof(T) <= budget.
+    const std::size_t budget =
+        popt.scratch_budget ? popt.scratch_budget : n * sizeof(T);
+    unsigned group_threads = nthreads;
+    if (max_group > 0) {
+        const std::size_t per_task = max_group * sizeof(T);
+        const std::size_t fit = per_task ? budget / per_task : 0;
+        if (fit < group_threads) {
+            group_threads = fit ? static_cast<unsigned>(fit) : 1;
+        }
+    }
+
+    if (group_threads <= 1) {
+        std::vector<T> scratch(max_group);
+        for (std::size_t b = 0; b < B; ++b) process_group(b, scratch);
+    } else {
+        std::atomic<std::size_t> next{0};
+        pool->run(group_threads, [&](unsigned) {
+            std::vector<T> scratch(max_group);
+            for (;;) {
+                const std::size_t b =
+                    next.fetch_add(1, std::memory_order_relaxed);
+                if (b >= B) break;
+                process_group(b, scratch);
+            }
+        });
+    }
 }
 
 }  // namespace parallel_detail

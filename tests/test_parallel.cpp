@@ -3,9 +3,11 @@
 #include <oblivone/parallel.hpp>
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <cstdio>
 #include <random>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -36,6 +38,50 @@ struct Item {
     std::int32_t key;
     double value;
 };
+
+void test_concurrent() {
+    const std::size_t n = 50000;
+    std::atomic<int> failures{0};
+    std::vector<std::thread> callers;
+    for (int i = 0; i < 4; ++i) {
+        callers.emplace_back([&, i] {
+            std::vector<double> v(n);
+            std::mt19937_64 lrng(123 + static_cast<std::uint64_t>(i));
+            std::uniform_real_distribution<double> d(-1.0, 1.0);
+            for (auto& x : v) x = d(lrng);
+
+            oblivone::parallel_options popt;
+            popt.threads = 2;
+            popt.min_n = 1000;
+            oblivone::parallel_sort(v, oblivone::options{}, popt);
+            if (!sorted_by_key(v)) ++failures;
+        });
+    }
+    for (auto& t : callers) t.join();
+
+    // One injected pool shared by concurrent callers; run() serializes them.
+    oblivone::thread_pool pool(4);
+    oblivone::parallel_options popt;
+    popt.pool = &pool;
+    popt.min_n = 1000;
+    callers.clear();
+    for (int i = 0; i < 2; ++i) {
+        callers.emplace_back([&, i] {
+            std::vector<double> v(n);
+            std::mt19937_64 lrng(456 + static_cast<std::uint64_t>(i));
+            std::uniform_real_distribution<double> d(-1.0, 1.0);
+            for (auto& x : v) x = d(lrng);
+            oblivone::parallel_sort(v, oblivone::options{}, popt);
+            if (!sorted_by_key(v)) ++failures;
+        });
+    }
+    for (auto& t : callers) t.join();
+
+    if (failures.load() != 0) {
+        std::printf("FAIL concurrent (%d)\n", failures.load());
+        ++g_failures;
+    }
+}
 
 void test_items() {
     const std::size_t n = 200000;
@@ -107,6 +153,7 @@ int main() {
     }
 
     test_items();
+    test_concurrent();
 
     if (g_failures == 0) {
         std::printf("parallel tests passed\n");

@@ -229,7 +229,8 @@ oblivone::parallel_sort(v, oblivone::options{}, popt);
 
 - `threads=0`：n<1e7 自动用 4，n≥1e7 用 12（上限 hardware）；
 - `min_n=2e6`：1e6 few/organ 并行会回退，默认串行；
-- 每线程计数表上限 64K，避免 T×1M 表爆内存。
+- 每线程计数表上限 64K，避免 T×1M 表爆内存；
+- `scratch_budget=0`：默认按 `n*sizeof(T)` 限制组排序 scratch，必要时降低组并发。
 
 实测（相对同库单线程 core；1e6 行显式设 `min_n=1e6`）：
 
@@ -241,7 +242,7 @@ oblivone::parallel_sort(v, oblivone::options{}, popt);
 
 限制：
 
-- 每线程 scratch 为 `max_group`，大组会吃内存；
+- 每线程 scratch 受 `scratch_budget` 限制，大组会自动降低组并发；
 - 未注入 pool 时每次调用创建/销毁线程；
 - 一个 `thread_pool` 的 `run()` 串行化，不保证并发提交；
 - 还没有 TSan/并发 fuzz；
