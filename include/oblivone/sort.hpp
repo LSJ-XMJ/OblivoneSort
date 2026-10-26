@@ -55,6 +55,10 @@ struct options {
     // 每层桶数上限。内部还会按 n 自适应：n ≤ 2e6 用 64K，更大用 1M；
     // 这里再设一个上界，0 按 1 处理。
     std::size_t max_buckets = std::size_t(1) << 20;
+
+    // 0 = 使用上面的自适应 cap；>0 时强制用这个 cap（仍受 max_buckets 限制）。
+    // 主要给基准/调参用。
+    std::size_t bucket_cap = 0;
 };
 
 // 兜底排序的契约（XSort 的一部分）：
@@ -288,7 +292,10 @@ void sort_range(T* a, std::size_t m, int depth, const KeyFn& key,
     // 计数表要留在缓存里：n ≤ 2e6 用 64K 桶（256KB 表），
     // 更大的 n 用 1M 桶（4MB 表）。max_buckets 仍然可以再往下压。
     const std::size_t auto_cap =
-        (m <= 2000000) ? (std::size_t(1) << 16) : (std::size_t(1) << 20);
+        opt.bucket_cap
+            ? opt.bucket_cap
+            : ((m <= 2000000) ? (std::size_t(1) << 16)
+                              : (std::size_t(1) << 20));
     const std::size_t cap = (std::min)(opt.max_buckets, auto_cap);
     const std::size_t B =
         (std::max)(std::size_t(1), (std::min)(m, cap));

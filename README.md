@@ -166,6 +166,7 @@ opt.leaf_sort   = 22;                 // 组 < 这个值插入（默认 22）
 opt.scan_threshold = 256;             // 嵌套块 > 此值先做有序扫描/插入测试
 opt.max_depth   = 16;                 // 递归深度上限
 opt.max_buckets = std::size_t(1) << 16;
+opt.bucket_cap  = 0;                  // 0=自动；>0 强制每层 cap（调参用）
 oblivone::sort(v, opt);
 ```
 

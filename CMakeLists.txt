@@ -70,6 +70,19 @@ target_link_libraries(bench_offset_tables PRIVATE oblivone)
 add_executable(bench_offset_first bench/bench_offset_first.cpp)
 target_link_libraries(bench_offset_first PRIVATE oblivone)
 
+add_executable(bench_bscan bench/bench_bscan.cpp)
+target_link_libraries(bench_bscan PRIVATE oblivone)
+
+add_executable(bench_bcap_real bench/bench_bcap_real.cpp)
+target_link_libraries(bench_bcap_real PRIVATE oblivone)
+
+add_executable(bench_mean_center bench/bench_mean_center.cpp)
+target_link_libraries(bench_mean_center PRIVATE oblivone)
+
+find_package(Threads REQUIRED)
+add_executable(bench_parallel bench/bench_parallel.cpp)
+target_link_libraries(bench_parallel PRIVATE oblivone Threads::Threads)
+
 add_executable(bench_offset_hybrid bench/bench_offset_hybrid.cpp)
 target_link_libraries(bench_offset_hybrid PRIVATE oblivone)
 
