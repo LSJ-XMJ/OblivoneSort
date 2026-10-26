@@ -1,0 +1,28 @@
+{
+  "title": "OblivoneSort",
+  "upload_type": "software",
+  "description": "OblivoneSort is a C++17 header-only, unstable distribution sort. It maps values to order-preserving uint64 keys, computes bucket indices directly, counts, prefix-sums, scatters, and recursively sorts buckets. An optional parallel header provides parallel root processing and depth-1 group sorting. It targets random and smooth numeric distributions, not TimSort-style structured data.",
+  "creators": [
+    {
+      "name": "肖明杰 (Xiao Mingjie)"
+    }
+  ],
+  "license": "Apache-2.0",
+  "access_right": "open",
+  "version": "1.0.0",
+  "publication_date": "2026-10-27",
+  "keywords": [
+    "sorting",
+    "distribution sort",
+    "header-only",
+    "C++17",
+    "parallel sorting"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/LSJ-XMJ/OblivoneSort",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
+}
