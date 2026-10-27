@@ -34,3 +34,31 @@ jobs:
       - name: fuzz (windows)
         run: .\build\Release\fuzz_sort.exe 200000 1
         if: runner.os == 'Windows'
+
+  sanitizers:
+    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: configure ASan/UBSan
+        run: cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_CXX_FLAGS=-fsanitize=address,undefined -fno-omit-frame-pointer" "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address,undefined"
+
+      - name: build ASan/UBSan
+        run: cmake --build build-asan -j2
+
+      - name: test ASan/UBSan
+        run: ctest --test-dir build-asan --output-on-failure
+
+      - name: fuzz ASan/UBSan
+        run: ./build-asan/fuzz_cache 100000 1
+
+      - name: configure TSan
+        run: cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug "-DCMAKE_CXX_FLAGS=-fsanitize=thread -fno-omit-frame-pointer" "-DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread"
+
+      - name: build TSan
+        run: cmake --build build-tsan -j2
+
+      - name: test TSan
+        run: ctest --test-dir build-tsan --output-on-failure
+
