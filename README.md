@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml/badge.svg)](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![DOI](https://zenodo.org/badge/1433127737.svg)](https://doi.org/10.5281/zenodo.23675733)
+[![DOI](https://zenodo.org/badge/1433127737.svg)](https://doi.org/10.5281/zenodo.23696382)
 
 English documentation for v1.0.x: [Code Design](docs/docs_1_0_0_EN/design.md) · [Usage](docs/docs_1_0_0_EN/usage.md)
 
