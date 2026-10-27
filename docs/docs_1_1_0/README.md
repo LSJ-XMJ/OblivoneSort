@@ -5,6 +5,7 @@ OblivoneSort 1.1.0 在 1.0.x 基础上增加了可选的桶号缓存，默认关
 | 文档 | 内容 |
 |---|---|
 | [cache.md](cache.md) | 桶号缓存的 API、限制、内存和性能 |
+| [benchmarks.md](benchmarks.md) | 与 TimSort、pdqsort、Boost 并行排序的对比 |
 
 ## 当前版本
 

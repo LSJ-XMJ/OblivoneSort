@@ -56,3 +56,7 @@ About `2n` extra bytes. Measured peak increase: about 12% at 1e7 and 1e8.
 - Default arithmetic keys: compiler- and type-dependent; may regress.
 - Parallel default keys: may regress.
 - 1e8: no gain; memory bandwidth dominates.
+
+See [benchmarks.md](benchmarks.md) for the strong-algorithm comparison. In that
+comparison, Boost parallel sorts and TimSort win several patterns; this cache
+does not make OblivoneSort the fastest option everywhere.

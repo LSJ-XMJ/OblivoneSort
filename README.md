@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1433127737.svg)](https://doi.org/10.5281/zenodo.23696382)
 
-English documentation for v1.1.0: [Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md)
+English documentation for v1.1.0: [Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md) · [Benchmarks](docs/docs_1_1_0_EN/benchmarks.md)
 
 C++17、header-only、非稳定的分布排序库。
 
@@ -136,7 +136,7 @@ oblivone::sort_by(values, expensive_key, opt);
 
 ## 性能
 
-以下为本机 GCC 15.2、`-O2`、单次中位数，仅用于展示量级；绝对值受 CPU/热漂移影响。
+以下仅与 `std::sort` 对比，使用 GCC 15.2、`-O2`、单次中位数，仅用于展示量级；绝对值受 CPU/热漂移影响。
 
 ### 单线程 1e6
 
@@ -155,6 +155,20 @@ oblivone::sort_by(values, expensive_key, opt);
 | 2e7 | 524.2 ms | 176.2 ms | 2.98× |
 
 并行默认 `min_n=2e6`；1e6 需要显式调低。
+
+### 性能边界
+
+以上表格只覆盖 `std::sort`，**不包含 TimSort、pdqsort、Boost.Sort 并行算法**。
+
+加入强算法后，结论不是“全场景最快”：
+
+- 随机/平滑：Boost `block_indirect_sort` 通常快于当前并行版；
+- organ/equal/push：TimSort 明显更快；
+- few/near-sorted：pdqsort 或并行 block sort 更快；
+- 1e8：缓存收益消失；
+- 当前并行版只适合作为“无第三方依赖”的轻量选择。
+
+如果允许 Boost/TBB 等成熟并行库，应先与它们基准对比。详见 [中文基准说明](docs/docs_1_1_0/benchmarks.md)。
 
 ## 构建
 
@@ -183,7 +197,7 @@ target_link_libraries(app PRIVATE oblivone::parallel)  # 并行，自动链接 T
 
 - 随机浮点/整数；
 - 分布相对平滑的数据；
-- 大 n 且允许并行；
+- 大 n，且无法使用 Boost/TBB 等成熟并行排序库；
 - 需要 header-only、无第三方依赖的场景。
 
 不适合：
@@ -197,7 +211,7 @@ target_link_libraries(app PRIVATE oblivone::parallel)  # 并行，自动链接 T
 ## 文档
 
 - 中文技术文档：[docs/docs_1_1_0/README.md](docs/docs_1_1_0/README.md)
-- English v1.1.0：[Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md)
+- English v1.1.0：[Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md) · [Benchmarks](docs/docs_1_1_0_EN/benchmarks.md)
 
 ## 作者
 
