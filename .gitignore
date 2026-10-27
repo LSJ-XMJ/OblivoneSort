@@ -15,5 +15,6 @@ CMakeCache.txt
 __pycache__/
 *.pyc
 docs/archive/
+docs/stop/
 research/
 old/

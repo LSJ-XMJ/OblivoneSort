@@ -4,6 +4,8 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1433127737.svg)](https://doi.org/10.5281/zenodo.23675733)
 
+English documentation for v1.0.0: [Code Design](docs/docs_1_0_0_EN/design.md) · [Usage](docs/docs_1_0_0_EN/usage.md)
+
 C++17、header-only、非稳定的分布排序库。
 
 OblivoneSort 把值映射成保序 `uint64_t` key，按 key 直接计算桶号，计数、前缀和、散播，再对桶内元素递归或插入排序。
@@ -173,13 +175,12 @@ target_link_libraries(app PRIVATE oblivone::parallel)  # 并行，自动链接 T
 
 ## 文档
 
-公开仓库只保留本 README；完整设计讨论记录不随仓库发布，毕竟这个代码逻辑足够简单了，如果有特别需要，私信后，我会整理对应文档。
+- 中文技术文档：[docs/docs_1_0_0/README.md](docs/docs_1_0_0/README.md)
+- English v1.0.0：[Code Design](docs/docs_1_0_0_EN/design.md) · [Usage](docs/docs_1_0_0_EN/usage.md)
 
 ## 作者
 
-肖明杰（Xiao Mingjie，笔名）。
-
-公开仓库不发布私人邮箱；联系请使用 GitHub 账号 [@LSJ-XMJ](https://github.com/LSJ-XMJ)。
+肖明杰。
 
 ## 许可
 
