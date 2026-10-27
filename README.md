@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1433127737.svg)](https://doi.org/10.5281/zenodo.23675733)
 
-English documentation for v1.0.0: [Code Design](docs/docs_1_0_0_EN/design.md) · [Usage](docs/docs_1_0_0_EN/usage.md)
+English documentation for v1.0.x: [Code Design](docs/docs_1_0_0_EN/design.md) · [Usage](docs/docs_1_0_0_EN/usage.md)
 
 C++17、header-only、非稳定的分布排序库。
 
@@ -14,7 +14,7 @@ OblivoneSort 把值映射成保序 `uint64_t` key，按 key 直接计算桶号�
 >
 > 不追求结构化数据，TimSort 在 organ/runs/push 等场景更强。
 
-当前版本：`v1.0.0`。
+当前版本：`v1.0.1`。
 
 ## 特性
 
@@ -176,7 +176,7 @@ target_link_libraries(app PRIVATE oblivone::parallel)  # 并行，自动链接 T
 ## 文档
 
 - 中文技术文档：[docs/docs_1_0_0/README.md](docs/docs_1_0_0/README.md)
-- English v1.0.0：[Code Design](docs/docs_1_0_0_EN/design.md) · [Usage](docs/docs_1_0_0_EN/usage.md)
+- English v1.0.x：[Code Design](docs/docs_1_0_0_EN/design.md) · [Usage](docs/docs_1_0_0_EN/usage.md)
 
 ## 作者
 
