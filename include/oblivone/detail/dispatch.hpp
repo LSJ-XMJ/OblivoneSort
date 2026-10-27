@@ -51,8 +51,17 @@ void sort_impl(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
                const options& opt, Fallback fallback) {
     if (!prepare(data, n, key, less, opt, fallback)) return;
 
+    const std::size_t limit = opt.bucket_limit ? opt.bucket_limit : 1;
+    const std::size_t buckets =
+        (std::max)(std::size_t(1), (std::min)(n, limit));
+
     std::vector<T> buf(n);
-    sort_range(data, n, 0, key, less, fallback, opt, buf);
+    if (opt.cache_bucket_index && buckets <= 65536) {
+        std::vector<std::uint16_t> bucket_index(n);
+        sort_range(data, n, 0, key, less, fallback, opt, buf, &bucket_index);
+    } else {
+        sort_range(data, n, 0, key, less, fallback, opt, buf);
+    }
 }
 
 }  // namespace detail

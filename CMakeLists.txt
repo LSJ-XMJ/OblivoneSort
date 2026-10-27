@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(OblivoneSort VERSION 1.0.1 LANGUAGES CXX)
+project(OblivoneSort VERSION 1.1.0 LANGUAGES CXX)
 
 include(CMakePackageConfigHelpers)
 
@@ -29,6 +29,9 @@ if(OBLIVONE_BUILD_BENCHMARKS)
 
     add_executable(bench_parallel bench/bench_parallel.cpp)
     target_link_libraries(bench_parallel PRIVATE oblivone_parallel)
+
+    add_executable(bench_cache bench/bench_cache.cpp)
+    target_link_libraries(bench_cache PRIVATE oblivone)
 endif()
 
 if(BUILD_TESTING)
@@ -43,6 +46,14 @@ if(BUILD_TESTING)
     add_executable(test_parallel tests/test_parallel.cpp)
     target_link_libraries(test_parallel PRIVATE oblivone_parallel)
     add_test(NAME test_parallel COMMAND test_parallel)
+
+    add_executable(test_cache tests/test_cache.cpp)
+    target_link_libraries(test_cache PRIVATE oblivone)
+    add_test(NAME test_cache COMMAND test_cache)
+
+    add_executable(fuzz_cache tests/fuzz_cache.cpp)
+    target_link_libraries(fuzz_cache PRIVATE oblivone)
+    add_test(NAME fuzz_cache COMMAND fuzz_cache 20000)
 endif()
 
 install(DIRECTORY include/ DESTINATION include)

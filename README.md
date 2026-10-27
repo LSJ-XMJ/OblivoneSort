@@ -4,7 +4,7 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1433127737.svg)](https://doi.org/10.5281/zenodo.23696382)
 
-English documentation for v1.0.x: [Code Design](docs/docs_1_0_0_EN/design.md) · [Usage](docs/docs_1_0_0_EN/usage.md)
+English documentation for v1.1.0: [Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md)
 
 C++17、header-only、非稳定的分布排序库。
 
@@ -14,12 +14,13 @@ OblivoneSort 把值映射成保序 `uint64_t` key，按 key 直接计算桶号�
 >
 > 不追求结构化数据，TimSort 在 organ/runs/push 等场景更强。
 
-当前版本：`v1.0.1`。
+当前版本：`v1.1.0`。
 
 ## 特性
 
 - 单线程 `sort` / `sort_by`；
 - 可选并行 `parallel_sort` / `parallel_sort_by`；
+- 可选桶号缓存（默认关闭）；
 - double 的 NaN 最后，`-0 == +0`；
 - 默认 fallback 对小段使用插入排序；
 - 可注入自定义 key / fallback / 线程池；
@@ -89,6 +90,7 @@ opt.leaf_sort      = 22;     // 组 m < 22 -> 插入
 opt.scan_threshold = 256;    // 嵌套扫描；0 = 关闭
 opt.max_depth      = 16;     // 递归上限
 opt.bucket_limit   = 65536;  // 每层桶数上限
+opt.cache_bucket_index = false;  // 1.1: 桶号缓存；仅 B <= 65536 生效
 ```
 
 并行：
@@ -101,6 +103,25 @@ oblivone::parallel_options popt;
 // scratch_budget = 0
 // pool           = nullptr
 ```
+
+### 桶号缓存
+
+1.1.0 新增可选缓存：
+
+```cpp
+oblivone::options opt;
+opt.cache_bucket_index = true;
+oblivone::sort_by(values, expensive_key, opt);
+```
+
+规则：
+
+- 默认关闭；
+- 仅当有效桶数 `B <= 65536` 时生效，使用 `uint16_t` 表；
+- `B > 65536` 自动忽略缓存；
+- 额外约 `2n` 字节内存；
+- 单线程递归和并行 root 使用缓存，并行组递归不缓存；
+- 适合昂贵自定义 key；默认整数 key 不一定更快，1e8 规模收益会消失。
 
 ## 语义
 
@@ -175,8 +196,8 @@ target_link_libraries(app PRIVATE oblivone::parallel)  # 并行，自动链接 T
 
 ## 文档
 
-- 中文技术文档：[docs/docs_1_0_0/README.md](docs/docs_1_0_0/README.md)
-- English v1.0.x：[Code Design](docs/docs_1_0_0_EN/design.md) · [Usage](docs/docs_1_0_0_EN/usage.md)
+- 中文技术文档：[docs/docs_1_1_0/README.md](docs/docs_1_1_0/README.md)
+- English v1.1.0：[Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md)
 
 ## 作者
 

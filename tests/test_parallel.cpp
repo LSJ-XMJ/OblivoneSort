@@ -5,6 +5,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <random>
 #include <thread>
 #include <vector>
@@ -74,6 +75,53 @@ int main() {
         oblivone::parallel_sort(values, oblivone::options{}, popt);
         if (!sorted_by_key(values)) {
             std::printf("FAIL injected pool\n");
+            ++g_failures;
+        }
+    }
+
+    {
+        oblivone::options opt;
+        opt.cache_bucket_index = true;
+
+        oblivone::parallel_options popt;
+        popt.threads = 2;
+        popt.min_n = 1000;
+        popt.max_buckets = 65536;
+
+        auto values = random;
+        oblivone::parallel_sort(values, opt, popt);
+        if (!sorted_by_key(values)) {
+            std::printf("FAIL cached parallel u16\n");
+            ++g_failures;
+        }
+
+        oblivone::thread_pool pool(2);
+        popt.pool = &pool;
+        auto injected = random;
+        oblivone::parallel_sort(injected, opt, popt);
+        if (!sorted_by_key(injected)) {
+            std::printf("FAIL cached parallel injected\n");
+            ++g_failures;
+        }
+
+        oblivone::options unlimited;
+        unlimited.cache_bucket_index = true;
+        unlimited.bucket_limit = (std::numeric_limits<std::size_t>::max)();
+        popt.pool = nullptr;
+        popt.max_buckets = 0;
+        auto ignored = random;
+        oblivone::parallel_sort(ignored, unlimited, popt);
+        if (!sorted_by_key(ignored)) {
+            std::printf("FAIL cached parallel >64K ignored\n");
+            ++g_failures;
+        }
+
+        popt.min_n = 1000000;
+        auto serial_fallback = std::vector<double>(random.begin(),
+                                                   random.begin() + 50000);
+        oblivone::parallel_sort(serial_fallback, opt, popt);
+        if (!sorted_by_key(serial_fallback)) {
+            std::printf("FAIL cached serial fallback\n");
             ++g_failures;
         }
     }

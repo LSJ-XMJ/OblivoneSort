@@ -6,6 +6,7 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <exception>
 #include <functional>
 #include <memory>
@@ -162,16 +163,22 @@ void impl(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         pool = local_pool.get();
         nthreads = pool->size();
     }
-    if (nthreads <= 1) {
-        std::vector<T> buf(n);
-        detail::sort_range(data, n, 0, key, less, fallback, opt, buf);
-        return;
-    }
-
     std::size_t cap = opt.bucket_limit ? opt.bucket_limit : 1;
     if (popt.max_buckets != 0) cap = (std::min)(cap, popt.max_buckets);
     const std::size_t buckets =
         (std::max)(std::size_t(1), (std::min)(n, cap));
+
+    if (nthreads <= 1) {
+        std::vector<T> buf(n);
+        if (opt.cache_bucket_index && buckets <= 65536) {
+            std::vector<std::uint16_t> bucket_index(n);
+            detail::sort_range(data, n, 0, key, less, fallback, opt, buf,
+                               &bucket_index);
+        } else {
+            detail::sort_range(data, n, 0, key, less, fallback, opt, buf);
+        }
+        return;
+    }
 
     std::uint64_t minimum = key(data[0]);
     std::uint64_t maximum = minimum;
@@ -181,6 +188,10 @@ void impl(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         if (k > maximum) maximum = k;
     }
     if (minimum == maximum) return;
+
+    const bool cache_buckets = opt.cache_bucket_index && buckets <= 65536;
+    std::vector<std::uint16_t> bucket_index;
+    if (cache_buckets) bucket_index.resize(n);
 
     const std::uint64_t range = maximum - minimum;
     const double scale =
@@ -199,8 +210,16 @@ void impl(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         const std::size_t begin = n * t / nthreads;
         const std::size_t end = n * (t + 1) / nthreads;
         auto& counts = local[t];
-        for (std::size_t i = begin; i < end; ++i) {
-            ++counts[bucket_of(key(data[i]))];
+        if (cache_buckets) {
+            for (std::size_t i = begin; i < end; ++i) {
+                const std::size_t b = bucket_of(key(data[i]));
+                bucket_index[i] = static_cast<std::uint16_t>(b);
+                ++counts[b];
+            }
+        } else {
+            for (std::size_t i = begin; i < end; ++i) {
+                ++counts[bucket_of(key(data[i]))];
+            }
         }
     });
 
@@ -239,9 +258,17 @@ void impl(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         const std::size_t begin = n * t / nthreads;
         const std::size_t end_pos = n * (t + 1) / nthreads;
         auto& off = offset[t];
-        for (std::size_t i = begin; i < end_pos; ++i) {
-            const std::size_t b = bucket_of(key(data[i]));
-            buf[off[b]++] = data[i];
+        if (cache_buckets) {
+            for (std::size_t i = begin; i < end_pos; ++i) {
+                const std::size_t b =
+                    static_cast<std::size_t>(bucket_index[i]);
+                buf[off[b]++] = data[i];
+            }
+        } else {
+            for (std::size_t i = begin; i < end_pos; ++i) {
+                const std::size_t b = bucket_of(key(data[i]));
+                buf[off[b]++] = data[i];
+            }
         }
     });
     pool->run(nthreads, [&](unsigned t) {

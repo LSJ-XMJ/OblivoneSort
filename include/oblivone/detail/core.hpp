@@ -49,10 +49,14 @@ bool budgeted_insertion(T* first, std::size_t n, const Less& less,
 
 // 对 [a, a+m) 做一次分桶排序。
 // buf 至少 m 个元素；递归层共用同一个 buf。
-template <class T, class KeyFn, class LessFn, class Fallback>
+// bucket_index 非空时缓存本层桶号；递归层共用同一个表，父层 scatter
+// 完成后子层可以覆盖前 m 个位置。
+template <class T, class KeyFn, class LessFn, class Fallback,
+          class Index = std::uint16_t>
 void sort_range(T* a, std::size_t m, int depth, const KeyFn& key,
                 const LessFn& less, Fallback& fallback, const options& opt,
-                std::vector<T>& buf) {
+                std::vector<T>& buf,
+                std::vector<Index>* bucket_index = nullptr) {
     if (m < 2) return;
 
     // 嵌套块有序快速路径；顶层已经由 dispatcher 做过。
@@ -102,8 +106,16 @@ void sort_range(T* a, std::size_t m, int depth, const KeyFn& key,
     };
 
     std::vector<std::uint32_t> count(buckets, 0);
-    for (std::size_t i = 0; i < m; ++i) {
-        ++count[bucket_of(key(a[i]))];
+    if (bucket_index) {
+        for (std::size_t i = 0; i < m; ++i) {
+            const std::size_t b = bucket_of(key(a[i]));
+            (*bucket_index)[i] = static_cast<Index>(b);
+            ++count[b];
+        }
+    } else {
+        for (std::size_t i = 0; i < m; ++i) {
+            ++count[bucket_of(key(a[i]))];
+        }
     }
 
     std::vector<std::uint32_t> start(buckets, 0);
@@ -116,9 +128,17 @@ void sort_range(T* a, std::size_t m, int depth, const KeyFn& key,
     }
 
     std::vector<std::uint32_t> pos = start;
-    for (std::size_t i = 0; i < m; ++i) {
-        const std::size_t b = bucket_of(key(a[i]));
-        buf[static_cast<std::size_t>(pos[b]++)] = a[i];
+    if (bucket_index) {
+        for (std::size_t i = 0; i < m; ++i) {
+            const std::size_t b =
+                static_cast<std::size_t>((*bucket_index)[i]);
+            buf[static_cast<std::size_t>(pos[b]++)] = a[i];
+        }
+    } else {
+        for (std::size_t i = 0; i < m; ++i) {
+            const std::size_t b = bucket_of(key(a[i]));
+            buf[static_cast<std::size_t>(pos[b]++)] = a[i];
+        }
     }
     std::copy(buf.begin(), buf.begin() + static_cast<std::ptrdiff_t>(m), a);
 
@@ -147,7 +167,8 @@ void sort_range(T* a, std::size_t m, int depth, const KeyFn& key,
         } else if (len < opt.small_sort) {
             fallback(group, group + len, less);
         } else {
-            sort_range(group, len, depth + 1, key, less, fallback, opt, buf);
+            sort_range(group, len, depth + 1, key, less, fallback, opt, buf,
+                       bucket_index);
         }
     }
 }

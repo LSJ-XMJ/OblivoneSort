@@ -3,7 +3,7 @@
 
 namespace oblivone {
 
-inline constexpr const char* version = "1.0.1";
+inline constexpr const char* version = "1.1.0";
 
 }  // namespace oblivone
 

@@ -24,6 +24,11 @@ struct options {
 
     // 每层桶数硬上限；0 按 1 处理。
     std::size_t bucket_limit = 65536;
+
+    // 缓存每个元素的桶号，避免 scatter 阶段重复计算 key + bucket。
+    // 默认关闭。仅当 effective bucket count <= 65536 时生效；
+    // 超过 65536 自动忽略。额外约 2n 字节，适合昂贵自定义 key。
+    bool cache_bucket_index = false;
 };
 
 }  // namespace oblivone
