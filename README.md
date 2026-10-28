@@ -3,11 +3,12 @@
 [![CI](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml/badge.svg)](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **2.0.0 prepared. Tag, GitHub Release and Zenodo archive are still pending.**
+> **2.0.0 test release (pre-release). Not merged into `main`.**
 >
 > The official parallel API is `oblivone::parallel`. The advanced scheduler
 > under `oblivone::advanced` is experimental and is not installed.
-> v1.1.0 remains the last archived release.
+> v1.1.0 remains the last archived release. No additional 2.0.0 docs are
+> provided for this test release.
 
 C++17, header-only, non-stable distribution sort.
 
@@ -226,29 +227,19 @@ Not suitable:
 - no extra `n` buffer available;
 - very small n (plain `std::sort` is simpler).
 
-## Documentation
-
-- 2.0.0 test record: [Testing](docs/2.0.0/testing.md)
-- 2.0.0 release checklist: [Release](docs/2.0.0/release.md)
-- 2.0.0 advanced scheduler: [Advanced foundation](docs/2.0.0/advanced-foundation.md)
-- v1.1.0 Chinese docs: [docs/docs_1_1_0/README.md](docs/docs_1_1_0/README.md)
-- v1.1.0 English docs: [Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md) · [Benchmarks](docs/docs_1_1_0_EN/benchmarks.md)
-
-The v1.1.0 documents describe the last archived release. The 2.0.0 advanced
-document describes an experimental backend that is excluded from install.
-
 ## Release status
 
 ```text
 version header     2.0.0
 CMake project      2.0.0
-tag                pending
-GitHub Release     pending
+release tag        v2.0.0-test
+release type       pre-release / test
+target branch      v2.0.0-dev
+main branch        not merged
+additional docs    none for 2.0.0
 Zenodo DOI         pending
-CITATION DOI       pending update
+CITATION DOI       pending
 ```
-
-Tag, release and Zenodo archiving are repository-owner operations.
 
 ## Author
 

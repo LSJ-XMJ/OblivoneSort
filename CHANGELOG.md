@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.0.0 — 2026-10-29
+## v2.0.0 — 2026-10-29 (test release)
 
 ### Added
 
@@ -19,9 +19,11 @@
 
 ### Notes
 
+- Test release / pre-release only; not merged into `main`.
 - The official parallel API is the simple phase-pool layer.
 - The advanced scheduler is experimental and not installed.
-- Tag, GitHub Release and the Zenodo DOI are pending repository-owner actions.
+- No additional 2.0.0 documentation is provided.
+- Tag, GitHub Release and the Zenodo DOI are repository-owner actions.
 - `CITATION.cff` DOI must be updated after the 2.0.0 archive exists.
 
 ## v1.1.0 — 2026-10-28
