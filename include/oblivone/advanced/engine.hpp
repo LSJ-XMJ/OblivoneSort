@@ -61,6 +61,43 @@ public:
         reserved_.store((std::min)(n, cap));
     }
 
+    void set_node_limit(std::size_t n) { node_limit_.store(n); }
+
+    void set_memory_limit(std::size_t bytes) {
+        memory_limit_.store(bytes ? bytes
+                                  : (std::numeric_limits<std::size_t>::max)());
+    }
+
+    bool try_node(std::size_t bytes) {
+        const std::size_t node_limit = node_limit_.load();
+        std::size_t nodes = nodes_.load();
+        for (;;) {
+            if (nodes >= node_limit) return false;
+            if (nodes_.compare_exchange_weak(nodes, nodes + 1,
+                                             std::memory_order_acq_rel)) {
+                break;
+            }
+        }
+
+        const std::size_t memory_limit = memory_limit_.load();
+        std::size_t used = memory_.load();
+        for (;;) {
+            if (bytes > memory_limit || used > memory_limit - bytes) {
+                nodes_.fetch_sub(1, std::memory_order_acq_rel);
+                return false;
+            }
+            if (memory_.compare_exchange_weak(used, used + bytes,
+                                              std::memory_order_acq_rel)) {
+                return true;
+            }
+        }
+    }
+
+    void release_node(std::size_t bytes) {
+        memory_.fetch_sub(bytes, std::memory_order_acq_rel);
+        nodes_.fetch_sub(1, std::memory_order_acq_rel);
+    }
+
     // lane: 0 outer, 1 inner, 2 group. owner < 0 selects round-robin.
     void submit(task_fn fn, int lane = 0, int owner = -1) {
         if (!fn) return;
@@ -239,6 +276,10 @@ private:
     std::atomic<std::size_t> pending_{0};
     std::atomic<std::size_t> active_{0};
     std::atomic<std::size_t> reserved_{0};
+    std::atomic<std::size_t> nodes_{0};
+    std::atomic<std::size_t> node_limit_{(std::numeric_limits<std::size_t>::max)()};
+    std::atomic<std::size_t> memory_{0};
+    std::atomic<std::size_t> memory_limit_{(std::numeric_limits<std::size_t>::max)()};
     std::atomic<bool> stopping_{false};
     std::mutex wait_mutex_;
     std::mutex error_mutex_;

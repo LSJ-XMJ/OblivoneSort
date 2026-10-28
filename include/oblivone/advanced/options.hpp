@@ -15,6 +15,10 @@ struct options {
     std::size_t task_slots_per_worker = 2;
     // Workers kept out of inner/group lanes.
     std::size_t reserved = 1;
+    // 0 = 2 * threads.
+    std::size_t max_nodes = 0;
+    // 0 = unlimited; approximate bytes for concurrent partition nodes.
+    std::size_t memory_budget = 0;
 };
 
 }  // namespace advanced

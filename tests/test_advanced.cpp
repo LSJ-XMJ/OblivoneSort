@@ -144,6 +144,47 @@ void check_sort() {
     }
 }
 
+void check_executor_and_budget() {
+    oblivone::advanced::executor ex(4);
+    std::mt19937_64 rng(8181);
+    std::uniform_real_distribution<double> d(-1.0, 1.0);
+    oblivone::advanced::options popt;
+    popt.min_n = 1000;
+
+    for (int round = 0; round < 3; ++round) {
+        std::vector<double> values(100000);
+        for (auto& x : values) x = d(rng);
+        oblivone::advanced::parallel_sort(ex, values, oblivone::options{},
+                                          popt);
+        if (!std::is_sorted(values.begin(), values.end(),
+                            [](double a, double b) {
+                                return oblivone::detail::less_double(a, b);
+                            })) {
+            std::printf("FAIL advanced executor round %d\n", round);
+            ++failures;
+            return;
+        }
+    }
+
+    std::vector<double> values(100000);
+    for (auto& x : values) x = d(rng);
+    auto reference = values;
+    std::sort(reference.begin(), reference.end());
+    oblivone::advanced::options tight;
+    tight.threads = 2;
+    tight.min_n = 1000;
+    tight.memory_budget = 1;
+    oblivone::advanced::parallel_sort(values, oblivone::options{}, tight);
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (oblivone::detail::key_of(values[i]) !=
+            oblivone::detail::key_of(reference[i])) {
+            std::printf("FAIL advanced memory fallback at %zu\n", i);
+            ++failures;
+            return;
+        }
+    }
+}
+
 void check_allocator() {
     std::mt19937_64 rng(7171);
     for (int trial = 0; trial < 20000; ++trial) {
@@ -197,6 +238,7 @@ int main() {
     check_exception();
     check_allocator();
     check_sort();
+    check_executor_and_budget();
     if (failures == 0) {
         std::printf("test_advanced passed\n");
         return 0;

@@ -48,18 +48,47 @@ public:
           par_opt_(par_opt) {
         chunks_ = (std::min)(workers_, n_);
         if (chunks_ == 0) chunks_ = 1;
-        counts_.assign(chunks_, std::vector<std::uint32_t>(buckets_, 0));
-        offsets_.assign(chunks_, std::vector<std::uint32_t>(buckets_, 0));
-        begin_.assign(buckets_, 0);
-        end_.assign(buckets_, 0);
-        buffer_.resize(n_);
         cached_ = sort_opt.cache_bucket_index && buckets_ <= 65536;
-        if (cached_) cache_.resize(n_);
+
+        const std::size_t table_bytes =
+            chunks_ * buckets_ * sizeof(std::uint32_t) * 2;
+        const std::size_t vector_bytes =
+            buckets_ * sizeof(std::uint32_t) * 2;
+        const std::size_t buffer_bytes = n_ * sizeof(T);
+        const std::size_t cache_bytes = cached_ ? n_ * sizeof(std::uint16_t) : 0;
+        bytes_ = table_bytes + vector_bytes + buffer_bytes + cache_bytes;
+        bytes_ += bytes_ / 16 + 4096;
+        admitted_ = eng_.try_node(bytes_);
+        if (!admitted_) {
+            bytes_ = 0;
+            return;
+        }
+
+        try {
+            counts_.assign(chunks_, std::vector<std::uint32_t>(buckets_, 0));
+            offsets_.assign(chunks_, std::vector<std::uint32_t>(buckets_, 0));
+            begin_.assign(buckets_, 0);
+            end_.assign(buckets_, 0);
+            buffer_.resize(n_);
+            if (cached_) cache_.resize(n_);
+        } catch (...) {
+            eng_.release_node(bytes_);
+            admitted_ = false;
+            bytes_ = 0;
+            throw;
+        }
         scale_ = static_cast<double>(buckets_) /
                  static_cast<double>(maximum_ - minimum_);
     }
 
+    bool admitted() const { return admitted_; }
+
+    ~root_node() {
+        if (admitted_) eng_.release_node(bytes_);
+    }
+
     void start() {
+        if (!admitted_) return;
         remaining_.store(chunks_);
         auto self = this->shared_from_this();
         for (std::size_t i = 0; i < chunks_; ++i) {
@@ -160,6 +189,13 @@ private:
         auto alloc = std::make_shared<allocator>(
             std::move(groups), n_, workers_, slots, depth_ + 1);
 
+        // Raise the level team before sizing group tasks. This is the only
+        // point where a completed scatter can donate idle workers safely.
+        const std::size_t available = eng_.team_for_child();
+        if (available > workers_) {
+            alloc->raise(available, slots_per_worker_);
+        }
+
         auto self = this->shared_from_this();
         plan p;
         while (alloc->next(p)) {
@@ -200,8 +236,10 @@ private:
                                     self->stop_len_, mn, mx, self->key_,
                                     self->less_, self->fallback_,
                                     self->sort_opt_, self->par_opt_);
-                                child->start();
-                                continue;
+                                if (child->admitted()) {
+                                    child->start();
+                                    continue;
+                                }
                             }
                         }
 
@@ -232,6 +270,8 @@ private:
     const oblivone::options& sort_opt_;
     const options& par_opt_;
     std::size_t chunks_ = 1;
+    bool admitted_ = false;
+    std::size_t bytes_ = 0;
     double scale_ = 1.0;
     std::vector<std::vector<std::uint32_t>> counts_;
     std::vector<std::vector<std::uint32_t>> offsets_;
