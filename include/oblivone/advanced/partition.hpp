@@ -50,13 +50,33 @@ public:
         if (chunks_ == 0) chunks_ = 1;
         cached_ = sort_opt.cache_bucket_index && buckets_ <= 65536;
 
+        if (par_opt.sample_buckets && n_ > 4096 && buckets_ > 1) {
+            const std::size_t sample_size = (std::min)(n_, std::size_t(16384));
+            buckets_ = (std::min)(buckets_, sample_size);
+            if (buckets_ > 1) {
+                std::vector<std::uint64_t> sample(sample_size);
+                for (std::size_t i = 0; i < sample_size; ++i) {
+                    sample[i] = key_(data_[n_ * i / sample_size]);
+                }
+                std::sort(sample.begin(), sample.end());
+                boundaries_.resize(buckets_ - 1);
+                for (std::size_t b = 1; b < buckets_; ++b) {
+                    boundaries_[b - 1] = sample[b * sample_size / buckets_];
+                }
+            }
+        }
+        cached_ = sort_opt.cache_bucket_index && buckets_ <= 65536;
+
         const std::size_t table_bytes =
             chunks_ * buckets_ * sizeof(std::uint32_t) * 2;
         const std::size_t vector_bytes =
             buckets_ * sizeof(std::uint32_t) * 2;
         const std::size_t buffer_bytes = n_ * sizeof(T);
         const std::size_t cache_bytes = cached_ ? n_ * sizeof(std::uint16_t) : 0;
-        bytes_ = table_bytes + vector_bytes + buffer_bytes + cache_bytes;
+        const std::size_t boundary_bytes =
+            boundaries_.size() * sizeof(std::uint64_t);
+        bytes_ = table_bytes + vector_bytes + buffer_bytes + cache_bytes +
+                 boundary_bytes;
         bytes_ += bytes_ / 16 + 4096;
         admitted_ = eng_.try_node(bytes_);
         if (!admitted_) {
@@ -77,8 +97,10 @@ public:
             bytes_ = 0;
             throw;
         }
-        scale_ = static_cast<double>(buckets_) /
-                 static_cast<double>(maximum_ - minimum_);
+        if (boundaries_.empty()) {
+            scale_ = static_cast<double>(buckets_) /
+                     static_cast<double>(maximum_ - minimum_);
+        }
     }
 
     bool admitted() const { return admitted_; }
@@ -101,6 +123,13 @@ private:
     std::size_t bucket(std::uint64_t k) const {
         if (k <= minimum_) return 0;
         if (k >= maximum_) return buckets_ - 1;
+        if (!boundaries_.empty()) {
+            const auto it =
+                std::upper_bound(boundaries_.begin(), boundaries_.end(), k);
+            const std::size_t b =
+                static_cast<std::size_t>(it - boundaries_.begin());
+            return b >= buckets_ ? buckets_ - 1 : b;
+        }
         const std::size_t b =
             static_cast<std::size_t>(static_cast<double>(k - minimum_) * scale_);
         return b >= buckets_ ? buckets_ - 1 : b;
@@ -299,6 +328,7 @@ private:
     bool admitted_ = false;
     std::size_t bytes_ = 0;
     double scale_ = 1.0;
+    std::vector<std::uint64_t> boundaries_;
     std::vector<std::vector<std::uint32_t>> counts_;
     std::vector<std::vector<std::uint32_t>> offsets_;
     std::vector<std::uint32_t> begin_;

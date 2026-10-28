@@ -159,6 +159,23 @@ void check_sort() {
         }
     }
 
+    std::vector<double> sampled_values(100000);
+    for (auto& x : sampled_values) x = d(rng);
+    auto sampled_ref = sampled_values;
+    std::sort(sampled_ref.begin(), sampled_ref.end());
+    oblivone::advanced::options sampled = popt;
+    sampled.sample_buckets = true;
+    oblivone::advanced::parallel_sort(sampled_values, oblivone::options{},
+                                      sampled);
+    for (std::size_t i = 0; i < sampled_values.size(); ++i) {
+        if (oblivone::detail::key_of(sampled_values[i]) !=
+            oblivone::detail::key_of(sampled_ref[i])) {
+            std::printf("FAIL advanced sample at %zu\n", i);
+            ++failures;
+            return;
+        }
+    }
+
     std::vector<double> organ(300000);
     for (std::size_t i = 0; i < organ.size(); ++i) {
         organ[i] = static_cast<double>(

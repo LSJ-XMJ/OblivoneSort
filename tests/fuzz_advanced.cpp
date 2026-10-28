@@ -92,6 +92,7 @@ int main(int argc, char** argv) {
             1 + static_cast<std::size_t>(choose(rng) % 3);
         popt.reserved = static_cast<std::size_t>(choose(rng) % 4);
         popt.max_nodes = static_cast<std::size_t>(choose(rng) % 5);
+        popt.sample_buckets = (choose(rng) % 4) == 0;
         if ((choose(rng) % 4) == 0) {
             popt.memory_budget =
                 1024 + static_cast<std::size_t>(choose(rng) % 200000);

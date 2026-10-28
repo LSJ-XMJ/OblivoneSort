@@ -19,6 +19,8 @@ struct options {
     std::size_t max_nodes = 0;
     // 0 = unlimited; approximate bytes for concurrent partition nodes.
     std::size_t memory_budget = 0;
+    // Opt-in sampled quantile bucket boundaries (off by default).
+    bool sample_buckets = false;
 };
 
 }  // namespace advanced

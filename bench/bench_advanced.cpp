@@ -51,8 +51,9 @@ int main(int argc, char** argv) {
     const int reps = (argc > 2) ? std::atoi(argv[2]) : 2;
     const unsigned threads =
         (argc > 3) ? static_cast<unsigned>(std::atoi(argv[3])) : 4;
+    const bool sample = (argc > 4) ? (std::atoi(argv[4]) != 0) : false;
     const char* names[] = {"random", "few", "organ"};
-    std::printf("pattern,n,serial,simple,advanced,adv/simple\n");
+    std::printf("pattern,n,serial,simple,advanced,adv/simple,sample\n");
     for (int p = 0; p < 3; ++p) {
         auto base = make(p, n);
         double s = median(base, [](std::vector<double>& v) {
@@ -64,13 +65,14 @@ int main(int argc, char** argv) {
             p.min_n = 1000;
             oblivone::parallel_sort(v, oblivone::options{}, p);
         }, reps);
-        double b = median(base, [threads](std::vector<double>& v) {
+        double b = median(base, [threads, sample](std::vector<double>& v) {
             oblivone::advanced::options p;
             p.threads = threads;
             p.min_n = 1000;
+            p.sample_buckets = sample;
             oblivone::advanced::parallel_sort(v, oblivone::options{}, p);
         }, reps);
-        std::printf("%s,%zu,%.3f,%.3f,%.3f,%.3f\n", names[p], n, s, a, b,
-                    b / a);
+        std::printf("%s,%zu,%.3f,%.3f,%.3f,%.3f,%d\n", names[p], n, s, a, b,
+                    b / a, sample ? 1 : 0);
     }
 }
