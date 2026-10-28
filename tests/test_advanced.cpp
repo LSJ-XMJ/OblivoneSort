@@ -1,10 +1,13 @@
 #include <oblivone/advanced/engine.hpp>
 #include <oblivone/advanced/level.hpp>
+#include <oblivone/advanced/sort.hpp>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdio>
 #include <functional>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <thread>
@@ -79,6 +82,51 @@ void check_exception() {
     }
 }
 
+void check_sort() {
+    std::mt19937_64 rng(6161);
+    std::uniform_real_distribution<double> d(-1.0, 1.0);
+    std::vector<double> values(300000);
+    for (auto& x : values) x = d(rng);
+
+    auto reference = values;
+    std::sort(reference.begin(), reference.end(),
+              [](double a, double b) {
+                  return oblivone::detail::key_of(a) <
+                         oblivone::detail::key_of(b);
+              });
+
+    oblivone::advanced::options popt;
+    popt.threads = 4;
+    popt.min_n = 1000;
+    oblivone::advanced::parallel_sort(values, oblivone::options{}, popt);
+
+    for (std::size_t i = 1; i < values.size(); ++i) {
+        if (oblivone::detail::key_of(values[i]) <
+            oblivone::detail::key_of(values[i - 1])) {
+            std::printf("FAIL advanced order at %zu\n", i);
+            ++failures;
+            return;
+        }
+    }
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (oblivone::detail::key_of(values[i]) !=
+            oblivone::detail::key_of(reference[i])) {
+            std::printf("FAIL advanced multiset at %zu\n", i);
+            ++failures;
+            return;
+        }
+    }
+
+    std::vector<double> special{
+        2.0, (std::numeric_limits<double>::quiet_NaN)(), -0.0, 0.0,
+        -(std::numeric_limits<double>::infinity)(),
+        (std::numeric_limits<double>::infinity)()};
+    oblivone::advanced::parallel_sort(special, oblivone::options{}, popt);
+    for (double x : special) {
+        (void)x;
+    }
+}
+
 void check_allocator() {
     std::mt19937_64 rng(7171);
     for (int trial = 0; trial < 20000; ++trial) {
@@ -131,6 +179,7 @@ int main() {
     check_reservation();
     check_exception();
     check_allocator();
+    check_sort();
     if (failures == 0) {
         std::printf("test_advanced passed\n");
         return 0;
