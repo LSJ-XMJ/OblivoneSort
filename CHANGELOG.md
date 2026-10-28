@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.0.0-dev — unreleased
+
+### Changed
+
+- 2.0.0 development starts from a serial-only baseline.
+- Removed the parallel header, `thread_pool`, `parallel_sort`, parallel tests and
+  parallel benchmark from this branch.
+- Removed the Threads dependency from CMake and the installed package config.
+- `oblivone::version` is `2.0.0-dev`.
+
+### Notes
+
+- This is an unreleased template, not a 2.0.0 release.
+- v1.1.0 remains the stable release; its parallel implementation is available
+  from the v1.1.0 tag.
+- The 2.0 parallel runtime will be developed separately and is not part of this
+  serial-only branch.
+
 ## v1.1.0 — 2026-10-28
 
 ### Added

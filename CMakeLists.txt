@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-project(OblivoneSort VERSION 1.1.0 LANGUAGES CXX)
+# 2.0 development template. Not released.
+project(OblivoneSort VERSION 2.0.0 LANGUAGES CXX)
 
 include(CMakePackageConfigHelpers)
 
@@ -16,19 +17,11 @@ else()
 endif()
 
 include(CTest)
-find_package(Threads REQUIRED)
-
-add_library(oblivone_parallel INTERFACE)
-target_link_libraries(oblivone_parallel INTERFACE oblivone Threads::Threads)
-set_target_properties(oblivone_parallel PROPERTIES EXPORT_NAME parallel)
 
 option(OBLIVONE_BUILD_BENCHMARKS "Build local benchmarks" OFF)
 if(OBLIVONE_BUILD_BENCHMARKS)
     add_executable(bench_standard bench/bench_standard.cpp)
     target_link_libraries(bench_standard PRIVATE oblivone)
-
-    add_executable(bench_parallel bench/bench_parallel.cpp)
-    target_link_libraries(bench_parallel PRIVATE oblivone_parallel)
 
     add_executable(bench_cache bench/bench_cache.cpp)
     target_link_libraries(bench_cache PRIVATE oblivone)
@@ -43,10 +36,6 @@ if(BUILD_TESTING)
     target_link_libraries(fuzz_sort PRIVATE oblivone)
     add_test(NAME fuzz_sort COMMAND fuzz_sort 20000)
 
-    add_executable(test_parallel tests/test_parallel.cpp)
-    target_link_libraries(test_parallel PRIVATE oblivone_parallel)
-    add_test(NAME test_parallel COMMAND test_parallel)
-
     add_executable(test_cache tests/test_cache.cpp)
     target_link_libraries(test_cache PRIVATE oblivone)
     add_test(NAME test_cache COMMAND test_cache)
@@ -57,7 +46,7 @@ if(BUILD_TESTING)
 endif()
 
 install(DIRECTORY include/ DESTINATION include)
-install(TARGETS oblivone oblivone_parallel EXPORT oblivoneTargets
+install(TARGETS oblivone EXPORT oblivoneTargets
     INCLUDES DESTINATION include)
 install(EXPORT oblivoneTargets
     FILE oblivoneTargets.cmake

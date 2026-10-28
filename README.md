@@ -4,31 +4,37 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1433127737.svg)](https://doi.org/10.5281/zenodo.23697924)
 
-English documentation for v1.1.0: [Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md) · [Benchmarks](docs/docs_1_1_0_EN/benchmarks.md)
-
-C++17、header-only、非稳定的分布排序库。
-
-OblivoneSort 把值映射成保序 `uint64_t` key，按 key 直接计算桶号，计数、前缀和、散播，再对桶内元素递归或插入排序。
-
-> **定位**：随机/平滑数值分布。
+> **2.0.0-dev serial-only template. Not released.**
 >
-> 不追求结构化数据，TimSort 在 organ/runs/push 等场景更强。
+> The released stable version is v1.1.0. Its parallel implementation remains
+> available from the v1.1.0 tag and release archive. This branch deliberately
+> removes parallel code to establish the serial baseline for 2.0.
 
-当前版本：`v1.1.0`。
+C++17, header-only, non-stable distribution sort.
 
-## 特性
+OblivoneSort maps values to an order-preserving `uint64_t` key, computes a
+bucket directly from that key, then performs count, prefix sum, scatter, and
+recursive or insertion sorting inside buckets.
 
-- 单线程 `sort` / `sort_by`；
-- 可选并行 `parallel_sort` / `parallel_sort_by`；
-- 可选桶号缓存（默认关闭）；
-- double 的 NaN 最后，`-0 == +0`；
-- 默认 fallback 对小段使用插入排序；
-- 可注入自定义 key / fallback / 线程池；
-- 核心头不依赖 `<thread>`；
-- 不使用任何第三方运行时库；
-- Apache-2.0，无专利。
+> **Scope**: random/smooth numeric distributions.
+>
+> It does not target structured data; TimSort is stronger on organ/runs/push
+> inputs.
 
-## 快速开始
+Current development version: `2.0.0-dev`.
+
+## Features
+
+- Single-threaded `sort` / `sort_by`;
+- optional bucket-index cache (off by default);
+- NaN ordered last for double/float, `-0 == +0`;
+- default fallback uses insertion sort for small ranges;
+- injectable custom key and fallback;
+- no `<thread>` dependency in the core headers;
+- no third-party runtime dependency;
+- Apache-2.0, no patents.
+
+## Quick start
 
 ```cpp
 #include <oblivone/sort.hpp>
@@ -37,7 +43,7 @@ std::vector<double> values = ...;
 oblivone::sort(values);
 ```
 
-自定义 key：
+Custom key:
 
 ```cpp
 struct Item {
@@ -50,63 +56,22 @@ oblivone::sort_by(items, [](const Item& item) {
 });
 ```
 
-自定义 key 必须保序并返回可转换为 `uint64_t` 的值。
+A custom key must be order-preserving and convertible to `uint64_t`.
 
-## 并行
-
-并行是独立头文件：
-
-```cpp
-#include <oblivone/parallel.hpp>
-
-oblivone::parallel_options popt;
-popt.threads = 12;       // 0 = 自动
-popt.min_n = 2000000;
-popt.max_buckets = 65536;
-popt.scratch_budget = 0; // 0 = n * sizeof(T)
-
-oblivone::parallel_sort(values, oblivone::options{}, popt);
-```
-
-注入常驻线程池：
-
-```cpp
-oblivone::thread_pool pool(12);
-
-oblivone::parallel_options popt;
-popt.pool = &pool;
-oblivone::parallel_sort(values, oblivone::options{}, popt);
-```
-
-默认 `sort` 永远不会创建线程；并行必须显式调用。
-
-## 参数
+## Options
 
 ```cpp
 oblivone::options opt;
-opt.small_top      = 48;     // 顶层 n <= 48 -> fallback
-opt.small_sort     = 16;     // 核心组 m < 16 -> fallback
-opt.leaf_sort      = 22;     // 组 m < 22 -> 插入
-opt.scan_threshold = 256;    // 嵌套扫描；0 = 关闭
-opt.max_depth      = 16;     // 递归上限
-opt.bucket_limit   = 65536;  // 每层桶数上限
-opt.cache_bucket_index = false;  // 1.1: 桶号缓存；仅 B <= 65536 生效
+opt.small_top      = 48;     // top-level n <= 48 -> fallback
+opt.small_sort     = 16;     // core group m < 16 -> fallback
+opt.leaf_sort      = 22;     // group m < 22 -> insertion
+opt.scan_threshold = 256;    // nested scan; 0 = disabled
+opt.max_depth      = 16;     // recursion limit
+opt.bucket_limit   = 65536;  // per-level bucket limit
+opt.cache_bucket_index = false;  // bucket-index cache
 ```
 
-并行：
-
-```cpp
-oblivone::parallel_options popt;
-// threads        = 0
-// min_n          = 2000000
-// max_buckets    = 65536
-// scratch_budget = 0
-// pool           = nullptr
-```
-
-### 桶号缓存
-
-1.1.0 新增可选缓存：
+### Bucket-index cache
 
 ```cpp
 oblivone::options opt;
@@ -114,63 +79,71 @@ opt.cache_bucket_index = true;
 oblivone::sort_by(values, expensive_key, opt);
 ```
 
-规则：
+Rules:
 
-- 默认关闭；
-- 仅当有效桶数 `B <= 65536` 时生效，使用 `uint16_t` 表；
-- `B > 65536` 自动忽略缓存；
-- 额外约 `2n` 字节内存；
-- 单线程递归和并行 root 使用缓存，并行组递归不缓存；
-- 适合昂贵自定义 key；默认整数 key 不一定更快，1e8 规模收益会消失。
+- off by default;
+- effective only when the number of buckets `B <= 65536`;
+- uses a `uint16_t` table;
+- `B > 65536` automatically disables the cache;
+- requires about `2n` extra bytes;
+- useful for expensive custom keys; default integer keys do not always benefit.
 
-## 语义
+## Semantics
 
-- 不稳定排序；
-- 所有 NaN 排在非 NaN 之后；
-- `-0.0` 与 `+0.0` 视为相等；
-- `n > UINT32_MAX` 直接走 fallback；
-- 默认 fallback：算术类型 n≤96 插入，其余 `std::sort`；
-- 用户 fallback 必须使用同一个 less，最坏 O(k log k)；
-- 异常只提供基本保证；
-- 并行会并发调用用户 key/fallback，二者必须可重入且线程安全。
+- not stable;
+- all NaNs are placed after non-NaNs;
+- `-0.0` and `+0.0` compare equal;
+- `n > UINT32_MAX` goes directly to fallback;
+- default fallback: insertion for arithmetic ranges with n <= 96, otherwise
+  `std::sort`;
+- a custom fallback must use the same `less`; worst case O(k log k);
+- exceptions provide only the basic guarantee.
 
-## 性能
+## Performance
 
-以下仅与 `std::sort` 对比，使用 GCC 15.2、`-O2`、单次中位数，仅用于展示量级；绝对值受 CPU/热漂移影响。
+The following compares only with `std::sort`, using GCC 15.2, `-O2`, and
+median timings. Absolute values depend on CPU and thermal state.
 
-### 单线程 1e6
+### 1e6, serial
 
-| 模式 | std::sort | OblivoneSort |
+| pattern | std::sort | OblivoneSort |
 |---|---:|---:|
-| random | 81.6 ms | **23.0 ms** |
-| sorted | 31.3 ms | **1.64 ms** |
-| organ | 97.7 ms | **18.3 ms** |
+| random | 83.6 ms | **24.3 ms** |
+| sorted | 32.2 ms | **1.44 ms** |
+| reverse | 22.5 ms | **1.66 ms** |
+| organ | 101.8 ms | **19.5 ms** |
+| sawtooth | 43.9 ms | **16.1 ms** |
+| runs | 69.9 ms | **20.6 ms** |
+| equal | 21.7 ms | **1.84 ms** |
+| few | 29.1 ms | **10.4 ms** |
+| near 1% | 33.8 ms | **19.7 ms** |
+| push back | 121.5 ms | **15.3 ms** |
 
-### 并行 random
+### 1e7, serial
 
-| n | 串行 | 并行 | 加速 |
-|---:|---:|---:|---:|
-| 1e6 | 25.0 ms | 13.9 ms | 1.80× |
-| 1e7 | 258.3 ms | 87.7 ms | 2.94× |
-| 2e7 | 524.2 ms | 176.2 ms | 2.98× |
+| pattern | std::sort | OblivoneSort |
+|---|---:|---:|
+| random | 965.5 ms | **260.1 ms** |
+| sorted | 408.4 ms | **16.1 ms** |
+| organ | 1417.8 ms | **191.7 ms** |
+| runs | 828.1 ms | **210.3 ms** |
+| few | 344.9 ms | **99.7 ms** |
+| near 1% | 422.4 ms | **202.1 ms** |
+| push back | 1502.1 ms | **134.6 ms** |
 
-并行默认 `min_n=2e6`；1e6 需要显式调低。
+### Boundaries
 
-### 性能边界
+These results are not a claim of being fastest in every case:
 
-以上表格只覆盖 `std::sort`，**不包含 TimSort、pdqsort、Boost.Sort 并行算法**。
+- random/smooth distributions are the main strength;
+- organ/runs/push: TimSort can be faster;
+- few/near-sorted: pdqsort/Boost spreadsort can be faster;
+- cache benefit disappears at very large n;
+- this branch has no parallel API.
 
-加入强算法后，结论不是“全场景最快”：
+See the historical v1.1.0 benchmark documentation for parallel comparisons.
 
-- 随机/平滑：Boost `block_indirect_sort` 通常快于当前并行版；
-- organ/equal/push：TimSort 明显更快；
-- few/near-sorted：pdqsort 或并行 block sort 更快；
-- 1e8：缓存收益消失；
-- 当前并行版只适合作为“无第三方依赖”的轻量选择。
-
-如果允许 Boost/TBB 等成熟并行库，应先与它们基准对比。详见 [中文基准说明](docs/docs_1_1_0/benchmarks.md)。
-
-## 构建
+## Build
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -178,46 +151,48 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-安装：
+Install:
 
 ```bash
 cmake --install build --prefix /your/prefix
 ```
 
-CMake 目标：
+CMake target:
 
 ```cmake
-target_link_libraries(app PRIVATE oblivone::oblivone)  # 单线程
-target_link_libraries(app PRIVATE oblivone::parallel)  # 并行，自动链接 Threads
+target_link_libraries(app PRIVATE oblivone::oblivone)
 ```
 
-## 适用与不适用
+This target does not link Threads.
 
-适合：
+## Suitable / not suitable
 
-- 随机浮点/整数；
-- 分布相对平滑的数据；
-- 大 n，且无法使用 Boost/TBB 等成熟并行排序库；
-- 需要 header-only、无第三方依赖的场景。
+Suitable:
 
-不适合：
+- random floating-point or integer data;
+- relatively smooth distributions;
+- large n with a header-only, no-third-party-dependency requirement;
+- environments where the serial core must not create threads.
 
-- 已排序/近有序为主；
-- 大量 run/结构化数据；
-- 要求稳定排序；
-- 不能分配额外 `n` 缓冲；
-- n 很小时（直接 `std::sort` 更简单）。
+Not suitable:
 
-## 文档
+- mostly sorted or near-sorted data;
+- many runs/structured data;
+- stable-sort requirements;
+- no extra `n` buffer available;
+- very small n (plain `std::sort` is simpler).
 
-- 中文技术文档：[docs/docs_1_1_0/README.md](docs/docs_1_1_0/README.md)
-- English v1.1.0：[Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md) · [Benchmarks](docs/docs_1_1_0_EN/benchmarks.md)
+## Documentation
 
-## 作者
+- v1.1.0 Chinese docs: [docs/docs_1_1_0/README.md](docs/docs_1_1_0/README.md)
+- v1.1.0 English docs: [Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md) · [Benchmarks](docs/docs_1_1_0_EN/benchmarks.md)
 
-肖明杰。
+These documents describe the released v1.1.0 and its parallel API.
 
-## 许可
+## Author
 
-Apache-2.0。见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)。
+肖明杰.
 
+## License
+
+Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
