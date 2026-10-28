@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml/badge.svg)](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
-[![DOI](https://zenodo.org/badge/1433127737.svg)](https://doi.org/10.5281/zenodo.23697924)
 
-> **2.0.0-dev. Not released.**
+> **2.0.0 prepared. Tag, GitHub Release and Zenodo archive are still pending.**
 >
-> The released stable version is v1.1.0. This branch starts the 2.0 serial
-> baseline and a new experimental parallel layer. No 2.0 tag or release exists.
+> The official parallel API is `oblivone::parallel`. The advanced scheduler
+> under `oblivone::advanced` is experimental and is not installed.
+> v1.1.0 remains the last archived release.
 
 C++17, header-only, non-stable distribution sort.
 
@@ -20,13 +20,14 @@ recursive or insertion sorting inside buckets.
 > It does not target structured data; TimSort is stronger on organ/runs/push
 > inputs.
 
-Current development version: `2.0.0-dev`.
+Current version: `2.0.0`.
 
 ## Features
 
 - Single-threaded `sort` / `sort_by`;
-- experimental parallel `parallel_sort` / `parallel_sort_by`;
+- public parallel `parallel_sort` / `parallel_sort_by`;
 - reusable `thread_pool` for parallel calls;
+- advanced work-stealing scheduler, experimental and not installed;
 - optional bucket-index cache (off by default);
 - NaN ordered last for double/float, `-0 == +0`;
 - default fallback uses insertion sort for small ranges;
@@ -168,8 +169,8 @@ median timings. Absolute values depend on CPU and thermal state.
 | few | 163.6 ms | **55.7 ms** | 2.94× |
 | organ | 244.9 ms | **99.9 ms** | 2.45× |
 
-The parallel layer is experimental in 2.0.0-dev. TSan is required before it is
-called stable.
+The public simple parallel layer has passed TSan. The advanced scheduler is
+experimental, not installed, and not part of the public API.
 
 ### Boundaries
 
@@ -179,7 +180,9 @@ These results are not a claim of being fastest in every case:
 - organ/runs/push: TimSort can be faster;
 - few/near-sorted: pdqsort/Boost spreadsort can be faster;
 - cache benefit disappears at very large n;
-- the new parallel layer is experimental and still needs TSan.
+- the public simple parallel layer has passed TSan;
+- the advanced scheduler is experimental, not installed, and not part of the
+  public API.
 
 See the historical v1.1.0 benchmark documentation for parallel comparisons.
 
@@ -225,10 +228,27 @@ Not suitable:
 
 ## Documentation
 
+- 2.0.0 test record: [Testing](docs/2.0.0/testing.md)
+- 2.0.0 release checklist: [Release](docs/2.0.0/release.md)
+- 2.0.0 advanced scheduler: [Advanced foundation](docs/2.0.0/advanced-foundation.md)
 - v1.1.0 Chinese docs: [docs/docs_1_1_0/README.md](docs/docs_1_1_0/README.md)
 - v1.1.0 English docs: [Code Design](docs/docs_1_1_0_EN/design.md) · [Usage](docs/docs_1_1_0_EN/usage.md) · [Benchmarks](docs/docs_1_1_0_EN/benchmarks.md)
 
-These documents describe the released v1.1.0 and its parallel API.
+The v1.1.0 documents describe the last archived release. The 2.0.0 advanced
+document describes an experimental backend that is excluded from install.
+
+## Release status
+
+```text
+version header     2.0.0
+CMake project      2.0.0
+tag                pending
+GitHub Release     pending
+Zenodo DOI         pending
+CITATION DOI       pending update
+```
+
+Tag, release and Zenodo archiving are repository-owner operations.
 
 ## Author
 
