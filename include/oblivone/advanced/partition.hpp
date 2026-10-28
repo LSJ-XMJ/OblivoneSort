@@ -203,15 +203,54 @@ private:
     }
 
     void complete_scatter() {
-        std::copy(buffer_.begin(), buffer_.end(), data_);
+        remaining_.store(chunks_);
+        auto self = this->shared_from_this();
+        for (std::size_t i = 0; i < chunks_; ++i) {
+            eng_.submit([self, i] { self->copy_chunk(i); }, 0,
+                        static_cast<int>(i % eng_.size()));
+        }
+    }
+
+    void copy_chunk(std::size_t index) {
+        const std::size_t lo = n_ * index / chunks_;
+        const std::size_t hi = n_ * (index + 1) / chunks_;
+        std::copy(buffer_.begin() + static_cast<std::ptrdiff_t>(lo),
+                  buffer_.begin() + static_cast<std::ptrdiff_t>(hi), data_ + lo);
+        if (remaining_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            start_groups();
+        }
+    }
+
+    void start_groups() {
         std::vector<span> groups;
         groups.reserve(buckets_);
+        std::size_t scratch_largest = 0;
         for (std::size_t b = 0; b < buckets_; ++b) {
-            if (end_[b] > begin_[b]) {
-                groups.push_back({static_cast<std::size_t>(begin_[b]),
-                                  static_cast<std::size_t>(end_[b])});
+            const std::size_t len =
+                static_cast<std::size_t>(end_[b] - begin_[b]);
+            if (len == 0) continue;
+            groups.push_back({static_cast<std::size_t>(begin_[b]),
+                              static_cast<std::size_t>(end_[b])});
+            const bool child =
+                len > stop_len_ && depth_ < sort_opt_.max_depth;
+            if (!child && len > scratch_largest) scratch_largest = len;
+        }
+
+        std::size_t scratch_slots = eng_.size();
+        if (scratch_largest > 0) {
+            const std::size_t budget = par_opt_.scratch_budget
+                                           ? par_opt_.scratch_budget
+                                           : n_ * sizeof(T);
+            const std::size_t fit =
+                budget / (scratch_largest * sizeof(T));
+            if (fit < scratch_slots) {
+                scratch_slots = fit ? fit : 1;
             }
         }
+        scratch_slots = (std::max)(std::size_t(1), scratch_slots);
+        auto scratches =
+            std::make_shared<std::vector<std::vector<T>>>(scratch_slots);
+        for (auto& scratch : *scratches) scratch.reserve(scratch_largest);
 
         const std::size_t slots =
             (std::max)(workers_, workers_ * slots_per_worker_);
@@ -219,7 +258,7 @@ private:
             std::move(groups), n_, workers_, slots, depth_ + 1);
 
         auto pumps = std::make_shared<pump_state>();
-        pumps->remaining.store(eng_.size());
+        pumps->remaining.store(scratch_slots);
         std::weak_ptr<allocator> weak = alloc;
         const std::size_t max_team = eng_.size();
         const std::size_t slot_fanout = slots_per_worker_;
@@ -233,9 +272,13 @@ private:
             });
 
         auto self = this->shared_from_this();
-        for (unsigned i = 0; i < eng_.size(); ++i) {
-            eng_.submit([self, alloc, pumps] { self->pump(alloc, pumps); }, 2,
-                        static_cast<int>(i % eng_.size()));
+        for (std::size_t i = 0; i < scratch_slots; ++i) {
+            eng_.submit(
+                [self, alloc, pumps, scratches, i] {
+                    self->pump(alloc, pumps, scratches,
+                               static_cast<unsigned>(i));
+                },
+                2, static_cast<int>(i % eng_.size()));
         }
     }
 
@@ -245,8 +288,11 @@ private:
     };
 
     void pump(const std::shared_ptr<allocator>& alloc,
-              const std::shared_ptr<pump_state>& pumps) {
+              const std::shared_ptr<pump_state>& pumps,
+              const std::shared_ptr<std::vector<std::vector<T>>>& scratches,
+              unsigned slot) {
         constexpr int kBatch = 2;
+        auto& scratch = (*scratches)[slot];
         for (int batch = 0; batch < kBatch; ++batch) {
             const std::size_t target =
                 (std::min)(static_cast<std::size_t>(eng_.size()),
@@ -261,14 +307,18 @@ private:
                 }
                 return;
             }
-            handle_plan(p);
+            handle_plan(p, scratch);
         }
 
         auto self = this->shared_from_this();
-        eng_.submit([self, alloc, pumps] { self->pump(alloc, pumps); }, 2);
+        eng_.submit(
+            [self, alloc, pumps, scratches, slot] {
+                self->pump(alloc, pumps, scratches, slot);
+            },
+            2, static_cast<int>(slot % eng_.size()));
     }
 
-    void handle_plan(const plan& p) {
+    void handle_plan(const plan& p, std::vector<T>& scratch) {
         for (const span& s : p.spans) {
             const std::size_t len = s.last - s.first;
             if (len < 2) continue;
@@ -303,7 +353,7 @@ private:
                 }
             }
 
-            std::vector<T> scratch(len);
+            if (scratch.size() < len) scratch.resize(len);
             oblivone::detail::sort_range(data_ + s.first, len, p.level, key_,
                                          less_, fallback_, sort_opt_, scratch);
         }

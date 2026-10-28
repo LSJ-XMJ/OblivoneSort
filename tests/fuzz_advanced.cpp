@@ -97,6 +97,10 @@ int main(int argc, char** argv) {
             popt.memory_budget =
                 1024 + static_cast<std::size_t>(choose(rng) % 200000);
         }
+        if ((choose(rng) % 4) == 0) {
+            popt.scratch_budget =
+                1024 + static_cast<std::size_t>(choose(rng) % 200000);
+        }
 
         verify(std::move(values), opt, popt);
         if (failures) return 1;
