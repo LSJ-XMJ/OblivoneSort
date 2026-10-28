@@ -217,19 +217,23 @@ private:
 
     void pump(const std::shared_ptr<allocator>& alloc,
               const std::shared_ptr<pump_state>& pumps) {
-        const std::size_t target =
-            (std::min)(static_cast<std::size_t>(eng_.size()),
-                       eng_.idle() + 1);
-        alloc->raise(target, slots_per_worker_);
+        constexpr int kBatch = 2;
+        for (int batch = 0; batch < kBatch; ++batch) {
+            const std::size_t target =
+                (std::min)(static_cast<std::size_t>(eng_.size()),
+                           eng_.idle() + 1);
+            alloc->raise(target, slots_per_worker_);
 
-        plan p;
-        if (!alloc->next(p)) {
-            if (pumps->remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-                eng_.remove_observer(pumps->observer);
+            plan p;
+            if (!alloc->next(p)) {
+                if (pumps->remaining.fetch_sub(1, std::memory_order_acq_rel) ==
+                    1) {
+                    eng_.remove_observer(pumps->observer);
+                }
+                return;
             }
-            return;
+            handle_plan(p);
         }
-        handle_plan(p);
 
         auto self = this->shared_from_this();
         eng_.submit([self, alloc, pumps] { self->pump(alloc, pumps); }, 2);

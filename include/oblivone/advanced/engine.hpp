@@ -276,6 +276,9 @@ private:
                 }
             }
             if (!got) {
+                // Only a worker that is about to sleep can donate its idle
+                // capacity to an active level.
+                notify_observers();
                 std::unique_lock<std::mutex> lock(wait_mutex_);
                 wake_.wait(lock, [this] {
                     return stopping_.load() || has_any();
@@ -306,8 +309,7 @@ private:
 
             // A finished task may make reserved capacity available for a
             // sleeping worker holding only lane 1/2 work.
-            wake_.notify_all();
-            notify_observers();
+            wake_.notify_one();
             if (pending_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
                 {
                     std::lock_guard<std::mutex> lock(wait_mutex_);
