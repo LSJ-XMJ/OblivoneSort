@@ -47,6 +47,14 @@ public:
         return a >= workers_ ? 0 : static_cast<std::size_t>(workers_) - a;
     }
 
+    // Team available to a child partition created by an active worker.
+    std::size_t team_for_child() const {
+        const std::size_t target = idle() + 1;
+        return (std::max)(std::size_t(1),
+                          (std::min)(static_cast<std::size_t>(workers_),
+                                     target));
+    }
+
     void reserve(std::size_t n) {
         const std::size_t cap =
             workers_ ? static_cast<std::size_t>(workers_ - 1) : 0;

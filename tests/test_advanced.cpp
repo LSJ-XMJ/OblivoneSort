@@ -125,6 +125,23 @@ void check_sort() {
     for (double x : special) {
         (void)x;
     }
+
+    std::vector<double> organ(300000);
+    for (std::size_t i = 0; i < organ.size(); ++i) {
+        organ[i] = static_cast<double>(
+            i < organ.size() / 2 ? i : organ.size() - i);
+    }
+    auto organ_ref = organ;
+    std::sort(organ_ref.begin(), organ_ref.end());
+    oblivone::advanced::parallel_sort(organ, oblivone::options{}, popt);
+    for (std::size_t i = 0; i < organ.size(); ++i) {
+        if (oblivone::detail::key_of(organ[i]) !=
+            oblivone::detail::key_of(organ_ref[i])) {
+            std::printf("FAIL advanced organ at %zu\n", i);
+            ++failures;
+            return;
+        }
+    }
 }
 
 void check_allocator() {

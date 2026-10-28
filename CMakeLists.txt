@@ -37,6 +37,9 @@ if(OBLIVONE_BUILD_BENCHMARKS)
 
     add_executable(bench_parallel bench/bench_parallel.cpp)
     target_link_libraries(bench_parallel PRIVATE oblivone_parallel)
+
+    add_executable(bench_advanced bench/bench_advanced.cpp)
+    target_link_libraries(bench_advanced PRIVATE oblivone_advanced oblivone_parallel)
 endif()
 
 if(BUILD_TESTING)

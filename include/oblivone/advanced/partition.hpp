@@ -25,15 +25,17 @@ class root_node : public std::enable_shared_from_this<
                       root_node<T, KeyFn, LessFn, Fallback>> {
 public:
     root_node(engine& eng, T* data, std::size_t n, std::size_t workers,
-              std::size_t buckets, std::uint64_t minimum,
-              std::uint64_t maximum, const KeyFn& key, const LessFn& less,
-              Fallback& fallback, const oblivone::options& sort_opt,
-              const options& par_opt)
+              std::size_t buckets, int depth, std::size_t stop_len,
+              std::uint64_t minimum, std::uint64_t maximum,
+              const KeyFn& key, const LessFn& less, Fallback& fallback,
+              const oblivone::options& sort_opt, const options& par_opt)
         : eng_(eng),
           data_(data),
           n_(n),
           workers_(workers ? workers : 1),
           buckets_(buckets ? buckets : 1),
+          depth_(depth),
+          stop_len_(stop_len),
           slots_per_worker_(par_opt.task_slots_per_worker
                                 ? par_opt.task_slots_per_worker
                                 : 1),
@@ -42,7 +44,8 @@ public:
           key_(key),
           less_(less),
           fallback_(fallback),
-          sort_opt_(sort_opt) {
+          sort_opt_(sort_opt),
+          par_opt_(par_opt) {
         chunks_ = (std::min)(workers_, n_);
         if (chunks_ == 0) chunks_ = 1;
         counts_.assign(chunks_, std::vector<std::uint32_t>(buckets_, 0));
@@ -155,7 +158,7 @@ private:
         const std::size_t slots =
             (std::max)(workers_, workers_ * slots_per_worker_);
         auto alloc = std::make_shared<allocator>(
-            std::move(groups), n_, workers_, slots, 1);
+            std::move(groups), n_, workers_, slots, depth_ + 1);
 
         auto self = this->shared_from_this();
         plan p;
@@ -165,6 +168,43 @@ private:
                     for (const span& s : p.spans) {
                         const std::size_t len = s.last - s.first;
                         if (len < 2) continue;
+
+                        if (len > self->stop_len_ &&
+                            p.level < self->sort_opt_.max_depth) {
+                            std::uint64_t mn = self->key_(self->data_[s.first]);
+                            std::uint64_t mx = mn;
+                            for (std::size_t i = s.first + 1; i < s.last; ++i) {
+                                const std::uint64_t k =
+                                    self->key_(self->data_[i]);
+                                if (k < mn) mn = k;
+                                if (k > mx) mx = k;
+                            }
+                            if (mn != mx) {
+                                std::size_t child_buckets =
+                                    self->sort_opt_.bucket_limit
+                                        ? self->sort_opt_.bucket_limit
+                                        : 1;
+                                if (self->par_opt_.max_buckets) {
+                                    child_buckets = (std::min)(
+                                        child_buckets,
+                                        self->par_opt_.max_buckets);
+                                }
+                                child_buckets = (std::max)(
+                                    std::size_t(1),
+                                    (std::min)(len, child_buckets));
+                                const std::size_t child_team =
+                                    self->eng_.team_for_child();
+                                auto child = std::make_shared<root_node>(
+                                    self->eng_, self->data_ + s.first, len,
+                                    child_team, child_buckets, p.level,
+                                    self->stop_len_, mn, mx, self->key_,
+                                    self->less_, self->fallback_,
+                                    self->sort_opt_, self->par_opt_);
+                                child->start();
+                                continue;
+                            }
+                        }
+
                         std::vector<T> scratch(len);
                         oblivone::detail::sort_range(
                             self->data_ + s.first, len, p.level, self->key_,
@@ -181,6 +221,8 @@ private:
     std::size_t n_;
     std::size_t workers_;
     std::size_t buckets_;
+    int depth_ = 0;
+    std::size_t stop_len_ = 0;
     std::size_t slots_per_worker_;
     std::uint64_t minimum_;
     std::uint64_t maximum_;
@@ -188,6 +230,7 @@ private:
     const LessFn& less_;
     Fallback& fallback_;
     const oblivone::options& sort_opt_;
+    const options& par_opt_;
     std::size_t chunks_ = 1;
     double scale_ = 1.0;
     std::vector<std::vector<std::uint32_t>> counts_;

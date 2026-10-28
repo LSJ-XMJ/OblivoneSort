@@ -88,8 +88,10 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
 
     auto node = std::make_shared<
         root_node<T, KeyFn, LessFn, Fallback>>(
-        eng, data, n, threads, buckets, minimum, maximum, key, less, fallback,
-        effective, par_opt);
+        eng, data, n, threads, buckets, 0,
+        (std::max)(std::size_t(1024),
+                   static_cast<std::size_t>(n / threads)),
+        minimum, maximum, key, less, fallback, effective, par_opt);
     node->start();
     eng.wait();
 }
