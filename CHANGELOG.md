@@ -4,19 +4,19 @@
 
 ### Changed
 
-- 2.0.0 development starts from a serial-only baseline.
-- Removed the parallel header, `thread_pool`, `parallel_sort`, parallel tests and
-  parallel benchmark from this branch.
-- Removed the Threads dependency from CMake and the installed package config.
+- 2.0.0 development starts from the serial-only baseline.
+- Added a fresh 2.0 parallel layer: `thread_pool`, `parallel_options`,
+  `parallel_sort`, `parallel_sort_by`.
+- Added the `oblivone::parallel` CMake target and Threads package dependency.
+- Added `tests/test_parallel.cpp` and `.github/workflows/tsan.yml`.
 - `oblivone::version` is `2.0.0-dev`.
 
 ### Notes
 
 - This is an unreleased template, not a 2.0.0 release.
-- v1.1.0 remains the stable release; its parallel implementation is available
-  from the v1.1.0 tag.
-- The 2.0 parallel runtime will be developed separately and is not part of this
-  serial-only branch.
+- v1.1.0 remains the stable release.
+- The parallel layer is experimental until TSan is green.
+- No 2.0 tag, GitHub release, or Zenodo record exists.
 
 ## v1.1.0 — 2026-10-28
 

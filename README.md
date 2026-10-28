@@ -4,11 +4,10 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/1433127737.svg)](https://doi.org/10.5281/zenodo.23697924)
 
-> **2.0.0-dev serial-only template. Not released.**
+> **2.0.0-dev. Not released.**
 >
-> The released stable version is v1.1.0. Its parallel implementation remains
-> available from the v1.1.0 tag and release archive. This branch deliberately
-> removes parallel code to establish the serial baseline for 2.0.
+> The released stable version is v1.1.0. This branch starts the 2.0 serial
+> baseline and a new experimental parallel layer. No 2.0 tag or release exists.
 
 C++17, header-only, non-stable distribution sort.
 
@@ -26,6 +25,8 @@ Current development version: `2.0.0-dev`.
 ## Features
 
 - Single-threaded `sort` / `sort_by`;
+- experimental parallel `parallel_sort` / `parallel_sort_by`;
+- reusable `thread_pool` for parallel calls;
 - optional bucket-index cache (off by default);
 - NaN ordered last for double/float, `-0 == +0`;
 - default fallback uses insertion sort for small ranges;
@@ -57,6 +58,34 @@ oblivone::sort_by(items, [](const Item& item) {
 ```
 
 A custom key must be order-preserving and convertible to `uint64_t`.
+
+## Parallel
+
+The 2.0 parallel layer is a separate header:
+
+```cpp
+#include <oblivone/parallel.hpp>
+
+oblivone::parallel_options popt;
+popt.threads = 12;
+popt.min_n = 2000000;
+popt.max_buckets = 65536;
+
+oblivone::parallel_sort(values, oblivone::options{}, popt);
+```
+
+Reusing a pool:
+
+```cpp
+oblivone::thread_pool pool(12);
+
+oblivone::parallel_options popt;
+popt.pool = &pool;
+oblivone::parallel_sort(values, oblivone::options{}, popt);
+```
+
+`sort` never creates threads. A custom key or fallback used through the parallel
+API must be reentrant and thread-safe.
 
 ## Options
 
@@ -131,6 +160,17 @@ median timings. Absolute values depend on CPU and thermal state.
 | near 1% | 422.4 ms | **202.1 ms** |
 | push back | 1502.1 ms | **134.6 ms** |
 
+### 1e7 parallel, 12 threads
+
+| pattern | serial | parallel | speedup |
+|---|---:|---:|---:|
+| random | 422.1 ms | **93.5 ms** | 4.51× |
+| few | 163.6 ms | **55.7 ms** | 2.94× |
+| organ | 244.9 ms | **99.9 ms** | 2.45× |
+
+The parallel layer is experimental in 2.0.0-dev. TSan is required before it is
+called stable.
+
 ### Boundaries
 
 These results are not a claim of being fastest in every case:
@@ -139,7 +179,7 @@ These results are not a claim of being fastest in every case:
 - organ/runs/push: TimSort can be faster;
 - few/near-sorted: pdqsort/Boost spreadsort can be faster;
 - cache benefit disappears at very large n;
-- this branch has no parallel API.
+- the new parallel layer is experimental and still needs TSan.
 
 See the historical v1.1.0 benchmark documentation for parallel comparisons.
 
@@ -160,10 +200,11 @@ cmake --install build --prefix /your/prefix
 CMake target:
 
 ```cmake
-target_link_libraries(app PRIVATE oblivone::oblivone)
+target_link_libraries(app PRIVATE oblivone::oblivone)   # serial
+target_link_libraries(app PRIVATE oblivone::parallel)   # parallel, links Threads
 ```
 
-This target does not link Threads.
+The serial target does not link Threads.
 
 ## Suitable / not suitable
 

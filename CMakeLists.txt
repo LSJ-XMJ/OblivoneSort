@@ -17,6 +17,11 @@ else()
 endif()
 
 include(CTest)
+find_package(Threads REQUIRED)
+
+add_library(oblivone_parallel INTERFACE)
+target_link_libraries(oblivone_parallel INTERFACE oblivone Threads::Threads)
+set_target_properties(oblivone_parallel PROPERTIES EXPORT_NAME parallel)
 
 option(OBLIVONE_BUILD_BENCHMARKS "Build local benchmarks" OFF)
 if(OBLIVONE_BUILD_BENCHMARKS)
@@ -25,6 +30,9 @@ if(OBLIVONE_BUILD_BENCHMARKS)
 
     add_executable(bench_cache bench/bench_cache.cpp)
     target_link_libraries(bench_cache PRIVATE oblivone)
+
+    add_executable(bench_parallel bench/bench_parallel.cpp)
+    target_link_libraries(bench_parallel PRIVATE oblivone_parallel)
 endif()
 
 if(BUILD_TESTING)
@@ -43,10 +51,14 @@ if(BUILD_TESTING)
     add_executable(fuzz_cache tests/fuzz_cache.cpp)
     target_link_libraries(fuzz_cache PRIVATE oblivone)
     add_test(NAME fuzz_cache COMMAND fuzz_cache 20000)
+
+    add_executable(test_parallel tests/test_parallel.cpp)
+    target_link_libraries(test_parallel PRIVATE oblivone_parallel)
+    add_test(NAME test_parallel COMMAND test_parallel)
 endif()
 
 install(DIRECTORY include/ DESTINATION include)
-install(TARGETS oblivone EXPORT oblivoneTargets
+install(TARGETS oblivone oblivone_parallel EXPORT oblivoneTargets
     INCLUDES DESTINATION include)
 install(EXPORT oblivoneTargets
     FILE oblivoneTargets.cmake

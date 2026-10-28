@@ -1,0 +1,35 @@
+name: tsan
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [v2.0.0-dev, tsan-sandbox]
+  pull_request:
+
+jobs:
+  tsan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: install
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake libtsan0
+
+      - name: configure
+        run: |
+          cmake -S . -B build-tsan \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=thread -fno-omit-frame-pointer -g -O1" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=thread" \
+            -DOBLIVONE_BUILD_BENCHMARKS=OFF
+
+      - name: build
+        run: cmake --build build-tsan -j2 --target test_parallel
+
+      - name: test
+        env:
+          TSAN_OPTIONS: "halt_on_error=1 second_deadlock_stack=1"
+        run: ctest --test-dir build-tsan -R '^test_parallel$' --output-on-failure
