@@ -318,6 +318,22 @@ private:
             2, static_cast<int>(slot % eng_.size()));
     }
 
+    std::size_t child_team_for_group(std::size_t len, double floor) const {
+        if (!(floor > 0.0) || static_cast<double>(len) <= 1.2 * floor) {
+            return eng_.team_for_child();
+        }
+        const double excess =
+            (static_cast<double>(len) - 1.2 * floor) / floor;
+        std::size_t extra = 0;
+        if (excess > 0.0) {
+            extra = static_cast<std::size_t>(excess);
+        }
+        const std::size_t team = 1 + extra;
+        const std::size_t outer_cap = eng_.max_child_team();
+        return (std::max)(std::size_t(1),
+                          (std::min)(outer_cap, team));
+    }
+
     void handle_plan(const plan& p, std::vector<T>& scratch) {
         for (const span& s : p.spans) {
             const std::size_t len = s.last - s.first;
@@ -341,7 +357,8 @@ private:
                     }
                     child_buckets = (std::max)(
                         std::size_t(1), (std::min)(len, child_buckets));
-                    const std::size_t child_team = eng_.team_for_child();
+                    const std::size_t child_team =
+                        child_team_for_group(len, p.floor);
                     auto child = std::make_shared<root_node>(
                         eng_, data_ + s.first, len, child_team, child_buckets,
                         p.level, stop_len_, mn, mx, key_, less_, fallback_,

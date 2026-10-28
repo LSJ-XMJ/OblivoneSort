@@ -49,11 +49,18 @@ public:
     }
 
     // Team available to a child partition created by an active worker.
+    // Always leave at least one worker for outer partition work.
+    std::size_t max_child_team() const {
+        const std::size_t keep =
+            (std::max)(std::size_t(1), reserved_.load());
+        return workers_ > keep ? static_cast<std::size_t>(workers_) - keep
+                               : 1;
+    }
+
     std::size_t team_for_child() const {
         const std::size_t target = idle() + 1;
         return (std::max)(std::size_t(1),
-                          (std::min)(static_cast<std::size_t>(workers_),
-                                     target));
+                          (std::min)(max_child_team(), target));
     }
 
     void reserve(std::size_t n) {

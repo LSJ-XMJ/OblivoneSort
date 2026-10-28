@@ -52,6 +52,11 @@ void check_phase() {
 void check_reservation() {
     oblivone::advanced::engine engine(4);
     engine.reserve(3);
+    if (engine.max_child_team() != 1 ||
+        engine.team_for_child() > engine.max_child_team()) {
+        std::printf("FAIL child outer reservation\n");
+        ++failures;
+    }
     engine.start();
     std::atomic<int> done{0};
     for (int i = 0; i < 200; ++i) {
