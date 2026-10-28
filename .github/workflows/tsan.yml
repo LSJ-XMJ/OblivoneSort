@@ -27,9 +27,9 @@ jobs:
             -DOBLIVONE_BUILD_BENCHMARKS=OFF
 
       - name: build
-        run: cmake --build build-tsan -j2 --target test_parallel
+        run: cmake --build build-tsan -j2 --target test_parallel test_advanced
 
       - name: test
         env:
           TSAN_OPTIONS: "halt_on_error=1 second_deadlock_stack=1"
-        run: ctest --test-dir build-tsan -R '^test_parallel$' --output-on-failure
+        run: ctest --test-dir build-tsan -R '^(test_parallel|test_advanced)$' --output-on-failure

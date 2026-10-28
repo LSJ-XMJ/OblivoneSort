@@ -1,0 +1,139 @@
+#include <oblivone/advanced/engine.hpp>
+#include <oblivone/advanced/level.hpp>
+
+#include <atomic>
+#include <cstddef>
+#include <cstdio>
+#include <functional>
+#include <random>
+#include <stdexcept>
+#include <thread>
+#include <vector>
+
+namespace {
+int failures = 0;
+
+void check_phase() {
+    oblivone::advanced::engine engine(4);
+    engine.start();
+    std::atomic<int> counter{0};
+    for (int i = 0; i < 2000; ++i) {
+        engine.submit([&] { counter.fetch_add(1, std::memory_order_relaxed); },
+                      0, i % 4);
+    }
+    engine.wait();
+    if (counter.load() != 2000) {
+        std::printf("FAIL phase counter=%d\n", counter.load());
+        ++failures;
+    }
+
+    std::atomic<int> leaves{0};
+    std::function<void(int)> grow;
+    grow = [&](int depth) {
+        if (depth == 0) {
+            leaves.fetch_add(1, std::memory_order_relaxed);
+            return;
+        }
+        engine.submit([&grow, depth] { grow(depth - 1); }, 1);
+        engine.submit([&grow, depth] { grow(depth - 1); }, 1);
+    };
+    engine.submit([&] { grow(6); }, 0);
+    engine.wait();
+    if (leaves.load() != 64) {
+        std::printf("FAIL tree leaves=%d\n", leaves.load());
+        ++failures;
+    }
+}
+
+void check_reservation() {
+    oblivone::advanced::engine engine(4);
+    engine.reserve(3);
+    engine.start();
+    std::atomic<int> done{0};
+    for (int i = 0; i < 200; ++i) {
+        engine.submit([&] {
+            std::this_thread::yield();
+            done.fetch_add(1, std::memory_order_relaxed);
+        }, 2);
+    }
+    engine.wait();
+    if (done.load() != 200) {
+        std::printf("FAIL reservation done=%d\n", done.load());
+        ++failures;
+    }
+}
+
+void check_exception() {
+    oblivone::advanced::engine engine(2);
+    engine.start();
+    engine.submit([] { throw std::runtime_error("engine failure"); }, 0);
+    bool caught = false;
+    try {
+        engine.wait();
+    } catch (const std::runtime_error&) {
+        caught = true;
+    }
+    if (!caught) {
+        std::printf("FAIL engine exception\n");
+        ++failures;
+    }
+}
+
+void check_allocator() {
+    std::mt19937_64 rng(7171);
+    for (int trial = 0; trial < 20000; ++trial) {
+        const std::size_t count = 1 + rng() % 50;
+        std::vector<std::size_t> lengths(count);
+        std::size_t total = 0;
+        for (auto& len : lengths) {
+            len = 1 + rng() % 256;
+            total += len;
+        }
+        std::vector<oblivone::advanced::span> groups;
+        std::size_t pos = 0;
+        for (std::size_t len : lengths) {
+            groups.push_back({pos, pos + len});
+            pos += len;
+        }
+        oblivone::advanced::allocator alloc(
+            groups, total, 1 + rng() % 6, 2 + rng() % 12, 0);
+
+        std::vector<int> mark(total, 0);
+        for (;;) {
+            if ((rng() % 4) == 0) {
+                alloc.donate(1 + rng() % 3, 1 + rng() % 2);
+            }
+            oblivone::advanced::plan plan;
+            if (!alloc.next(plan)) break;
+            for (const auto& s : plan.spans) {
+                if (s.first > s.last || s.last > total) {
+                    std::printf("FAIL allocator span\n");
+                    ++failures;
+                    return;
+                }
+                for (std::size_t i = s.first; i < s.last; ++i) ++mark[i];
+            }
+        }
+        for (std::size_t i = 0; i < total; ++i) {
+            if (mark[i] != 1) {
+                std::printf("FAIL allocator cover trial=%d i=%zu mark=%d\n",
+                            trial, i, mark[i]);
+                ++failures;
+                return;
+            }
+        }
+    }
+}
+}  // namespace
+
+int main() {
+    check_phase();
+    check_reservation();
+    check_exception();
+    check_allocator();
+    if (failures == 0) {
+        std::printf("test_advanced passed\n");
+        return 0;
+    }
+    return 1;
+}

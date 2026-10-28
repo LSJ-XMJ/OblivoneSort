@@ -23,6 +23,10 @@ add_library(oblivone_parallel INTERFACE)
 target_link_libraries(oblivone_parallel INTERFACE oblivone Threads::Threads)
 set_target_properties(oblivone_parallel PROPERTIES EXPORT_NAME parallel)
 
+# Experimental 2.0 advanced scheduler. Not installed yet.
+add_library(oblivone_advanced INTERFACE)
+target_link_libraries(oblivone_advanced INTERFACE oblivone Threads::Threads)
+
 option(OBLIVONE_BUILD_BENCHMARKS "Build local benchmarks" OFF)
 if(OBLIVONE_BUILD_BENCHMARKS)
     add_executable(bench_standard bench/bench_standard.cpp)
@@ -55,9 +59,14 @@ if(BUILD_TESTING)
     add_executable(test_parallel tests/test_parallel.cpp)
     target_link_libraries(test_parallel PRIVATE oblivone_parallel)
     add_test(NAME test_parallel COMMAND test_parallel)
+
+    add_executable(test_advanced tests/test_advanced.cpp)
+    target_link_libraries(test_advanced PRIVATE oblivone_advanced)
+    add_test(NAME test_advanced COMMAND test_advanced)
 endif()
 
-install(DIRECTORY include/ DESTINATION include)
+install(DIRECTORY include/ DESTINATION include
+    PATTERN "advanced" EXCLUDE)
 install(TARGETS oblivone oblivone_parallel EXPORT oblivoneTargets
     INCLUDES DESTINATION include)
 install(EXPORT oblivoneTargets
