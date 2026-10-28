@@ -66,6 +66,10 @@ if(BUILD_TESTING)
     add_executable(test_advanced tests/test_advanced.cpp)
     target_link_libraries(test_advanced PRIVATE oblivone_advanced)
     add_test(NAME test_advanced COMMAND test_advanced)
+
+    add_executable(fuzz_advanced tests/fuzz_advanced.cpp)
+    target_link_libraries(fuzz_advanced PRIVATE oblivone_advanced)
+    add_test(NAME fuzz_advanced COMMAND fuzz_advanced 1000 1)
 endif()
 
 install(DIRECTORY include/ DESTINATION include

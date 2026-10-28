@@ -2,6 +2,7 @@
 #define OBLIVONE_ADVANCED_ENGINE_HPP
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
@@ -67,6 +68,7 @@ public:
         std::lock_guard<std::mutex> lock(observer_mutex_);
         const std::size_t token = next_observer_++;
         observers_.push_back({token, std::move(observer)});
+        observer_count_.fetch_add(1, std::memory_order_relaxed);
         return token;
     }
 
@@ -75,6 +77,7 @@ public:
         for (auto it = observers_.begin(); it != observers_.end(); ++it) {
             if (it->first == token) {
                 observers_.erase(it);
+                observer_count_.fetch_sub(1, std::memory_order_relaxed);
                 return;
             }
         }
@@ -124,10 +127,11 @@ public:
             owner >= 0
                 ? static_cast<unsigned>(owner) % workers_
                 : next_home_.fetch_add(1, std::memory_order_relaxed) % workers_;
+        const int clamped = (std::max)(0, (std::min)(2, lane));
         pending_.fetch_add(1, std::memory_order_relaxed);
+        queued_[clamped].fetch_add(1, std::memory_order_relaxed);
         {
             std::lock_guard<std::mutex> lock(queues_[home].mutex);
-            const int clamped = (std::max)(0, (std::min)(2, lane));
             queues_[home].lanes[clamped].push_back(std::move(fn));
         }
         {
@@ -189,6 +193,7 @@ private:
         if (q.lanes[lane].empty()) return false;
         fn = std::move(q.lanes[lane].back());
         q.lanes[lane].pop_back();
+        queued_[lane].fetch_sub(1, std::memory_order_relaxed);
         return true;
     }
 
@@ -199,42 +204,29 @@ private:
             if (!q.lanes[lane].empty()) {
                 fn = std::move(q.lanes[lane].front());
                 q.lanes[lane].pop_front();
+                queued_[lane].fetch_sub(1, std::memory_order_relaxed);
                 return true;
             }
         }
         return false;
     }
 
-    bool has_lane(int lane) {
-        for (unsigned i = 0; i < workers_; ++i) {
-            std::lock_guard<std::mutex> lock(queues_[i].mutex);
-            if (!queues_[i].lanes[lane].empty()) return true;
-        }
-        return false;
-    }
-
     bool has_any() {
-        for (unsigned i = 0; i < workers_; ++i) {
-            std::lock_guard<std::mutex> lock(queues_[i].mutex);
-            for (int lane = 0; lane < 3; ++lane) {
-                if (!queues_[i].lanes[lane].empty()) return true;
-            }
-        }
-        return false;
+        return queued_[0].load(std::memory_order_relaxed) +
+                   queued_[1].load(std::memory_order_relaxed) +
+                   queued_[2].load(std::memory_order_relaxed) >
+               0;
     }
 
     std::size_t priority_load() {
-        std::size_t count = 0;
-        for (unsigned i = 0; i < workers_; ++i) {
-            std::lock_guard<std::mutex> lock(queues_[i].mutex);
-            count += queues_[i].lanes[0].size() +
-                     queues_[i].lanes[1].size();
-            if (count >= workers_) return workers_;
-        }
-        return count;
+        const std::size_t count =
+            queued_[0].load(std::memory_order_relaxed) +
+            queued_[1].load(std::memory_order_relaxed);
+        return (std::min)(count, static_cast<std::size_t>(workers_));
     }
 
     void notify_observers() {
+        if (observer_count_.load(std::memory_order_relaxed) == 0) return;
         std::vector<idle_observer> callbacks;
         {
             std::lock_guard<std::mutex> lock(observer_mutex_);
@@ -332,6 +324,7 @@ private:
     std::atomic<std::size_t> pending_{0};
     std::atomic<std::size_t> active_{0};
     std::atomic<std::size_t> reserved_{0};
+    std::array<std::atomic<std::size_t>, 3> queued_{};
     std::atomic<std::size_t> nodes_{0};
     std::atomic<std::size_t> node_limit_{(std::numeric_limits<std::size_t>::max)()};
     std::atomic<std::size_t> memory_{0};
@@ -343,6 +336,7 @@ private:
     std::condition_variable done_cv_;
     std::condition_variable wake_;
     std::vector<std::pair<std::size_t, idle_observer>> observers_;
+    std::atomic<std::size_t> observer_count_{0};
     std::size_t next_observer_ = 1;
     bool started_ = false;
     std::exception_ptr error_;
