@@ -61,6 +61,25 @@ public:
         reserved_.store((std::min)(n, cap));
     }
 
+    using idle_observer = std::function<void(std::size_t idle)>;
+
+    std::size_t add_observer(idle_observer observer) {
+        std::lock_guard<std::mutex> lock(observer_mutex_);
+        const std::size_t token = next_observer_++;
+        observers_.push_back({token, std::move(observer)});
+        return token;
+    }
+
+    void remove_observer(std::size_t token) {
+        std::lock_guard<std::mutex> lock(observer_mutex_);
+        for (auto it = observers_.begin(); it != observers_.end(); ++it) {
+            if (it->first == token) {
+                observers_.erase(it);
+                return;
+            }
+        }
+    }
+
     void set_node_limit(std::size_t n) { node_limit_.store(n); }
 
     void set_memory_limit(std::size_t bytes) {
@@ -204,6 +223,42 @@ private:
         return false;
     }
 
+    std::size_t priority_load() {
+        std::size_t count = 0;
+        for (unsigned i = 0; i < workers_; ++i) {
+            std::lock_guard<std::mutex> lock(queues_[i].mutex);
+            count += queues_[i].lanes[0].size() +
+                     queues_[i].lanes[1].size();
+            if (count >= workers_) return workers_;
+        }
+        return count;
+    }
+
+    void notify_observers() {
+        std::vector<idle_observer> callbacks;
+        {
+            std::lock_guard<std::mutex> lock(observer_mutex_);
+            if (observers_.empty()) return;
+            callbacks.reserve(observers_.size());
+            for (const auto& entry : observers_) callbacks.push_back(entry.second);
+        }
+        const std::size_t value = idle();
+        for (const auto& callback : callbacks) {
+            try {
+                callback(value);
+            } catch (...) {
+                // Donation callbacks must not terminate a worker.
+            }
+        }
+    }
+
+    std::size_t non_outer_reserve() {
+        const std::size_t queued = priority_load();
+        return (std::max)(reserved_.load(),
+                          (std::min)(queued, static_cast<std::size_t>(
+                                                 workers_ ? workers_ - 1 : 0)));
+    }
+
     void join() {
         for (auto& t : threads_) {
             if (t.joinable()) t.join();
@@ -217,14 +272,14 @@ private:
             task_fn fn;
             bool got = take_local(id, 0, fn) || steal(id, 0, fn);
             if (!got) {
-                const std::size_t a = active_.load();
-                if (a + reserved_.load() < workers_) {
+                const std::size_t reserve = non_outer_reserve();
+                if (active_.load() + reserve < workers_) {
                     got = take_local(id, 1, fn) || steal(id, 1, fn);
                 }
             }
             if (!got) {
-                const std::size_t a = active_.load();
-                if (a + reserved_.load() < workers_) {
+                const std::size_t reserve = non_outer_reserve();
+                if (active_.load() + reserve < workers_) {
                     got = take_local(id, 2, fn) || steal(id, 2, fn);
                 }
             }
@@ -260,6 +315,7 @@ private:
             // A finished task may make reserved capacity available for a
             // sleeping worker holding only lane 1/2 work.
             wake_.notify_all();
+            notify_observers();
             if (pending_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
                 {
                     std::lock_guard<std::mutex> lock(wait_mutex_);
@@ -283,8 +339,11 @@ private:
     std::atomic<bool> stopping_{false};
     std::mutex wait_mutex_;
     std::mutex error_mutex_;
+    std::mutex observer_mutex_;
     std::condition_variable done_cv_;
     std::condition_variable wake_;
+    std::vector<std::pair<std::size_t, idle_observer>> observers_;
+    std::size_t next_observer_ = 1;
     bool started_ = false;
     std::exception_ptr error_;
 };

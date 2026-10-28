@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
 #include <cstdio>
 #include <functional>
@@ -121,9 +122,41 @@ void check_sort() {
         2.0, (std::numeric_limits<double>::quiet_NaN)(), -0.0, 0.0,
         -(std::numeric_limits<double>::infinity)(),
         (std::numeric_limits<double>::infinity)()};
+    auto special_ref = special;
+    std::sort(special_ref.begin(), special_ref.end(),
+              [](double a, double b) {
+                  return oblivone::detail::key_of(a) <
+                         oblivone::detail::key_of(b);
+              });
     oblivone::advanced::parallel_sort(special, oblivone::options{}, popt);
-    for (double x : special) {
-        (void)x;
+    for (std::size_t i = 0; i < special.size(); ++i) {
+        if (oblivone::detail::key_of(special[i]) !=
+            oblivone::detail::key_of(special_ref[i])) {
+            std::printf("FAIL advanced special at %zu\n", i);
+            ++failures;
+            return;
+        }
+    }
+    if (!std::isnan(special.back())) {
+        std::printf("FAIL advanced NaN not last\n");
+        ++failures;
+        return;
+    }
+
+    std::vector<double> cached_values(100000);
+    for (auto& x : cached_values) x = d(rng);
+    auto cached_ref = cached_values;
+    std::sort(cached_ref.begin(), cached_ref.end());
+    oblivone::options cached;
+    cached.cache_bucket_index = true;
+    oblivone::advanced::parallel_sort(cached_values, cached, popt);
+    for (std::size_t i = 0; i < cached_values.size(); ++i) {
+        if (oblivone::detail::key_of(cached_values[i]) !=
+            oblivone::detail::key_of(cached_ref[i])) {
+            std::printf("FAIL advanced cache at %zu\n", i);
+            ++failures;
+            return;
+        }
     }
 
     std::vector<double> organ(300000);

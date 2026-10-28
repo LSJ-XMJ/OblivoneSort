@@ -189,68 +189,90 @@ private:
         auto alloc = std::make_shared<allocator>(
             std::move(groups), n_, workers_, slots, depth_ + 1);
 
-        // Raise the level team before sizing group tasks. This is the only
-        // point where a completed scatter can donate idle workers safely.
-        const std::size_t available = eng_.team_for_child();
-        if (available > workers_) {
-            alloc->raise(available, slots_per_worker_);
-        }
+        auto pumps = std::make_shared<pump_state>();
+        pumps->remaining.store(eng_.size());
+        std::weak_ptr<allocator> weak = alloc;
+        const std::size_t max_team = eng_.size();
+        const std::size_t slot_fanout = slots_per_worker_;
+        pumps->observer = eng_.add_observer(
+            [weak, max_team, slot_fanout](std::size_t idle) {
+                if (auto state = weak.lock()) {
+                    const std::size_t target =
+                        (std::min)(max_team, idle + 1);
+                    state->raise(target, slot_fanout);
+                }
+            });
 
         auto self = this->shared_from_this();
+        for (unsigned i = 0; i < eng_.size(); ++i) {
+            eng_.submit([self, alloc, pumps] { self->pump(alloc, pumps); }, 2,
+                        static_cast<int>(i % eng_.size()));
+        }
+    }
+
+    struct pump_state {
+        std::atomic<std::size_t> remaining{0};
+        std::size_t observer = 0;
+    };
+
+    void pump(const std::shared_ptr<allocator>& alloc,
+              const std::shared_ptr<pump_state>& pumps) {
+        const std::size_t target =
+            (std::min)(static_cast<std::size_t>(eng_.size()),
+                       eng_.idle() + 1);
+        alloc->raise(target, slots_per_worker_);
+
         plan p;
-        while (alloc->next(p)) {
-            eng_.submit(
-                [self, alloc, p = std::move(p)] {
-                    for (const span& s : p.spans) {
-                        const std::size_t len = s.last - s.first;
-                        if (len < 2) continue;
+        if (!alloc->next(p)) {
+            if (pumps->remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+                eng_.remove_observer(pumps->observer);
+            }
+            return;
+        }
+        handle_plan(p);
 
-                        if (len > self->stop_len_ &&
-                            p.level < self->sort_opt_.max_depth) {
-                            std::uint64_t mn = self->key_(self->data_[s.first]);
-                            std::uint64_t mx = mn;
-                            for (std::size_t i = s.first + 1; i < s.last; ++i) {
-                                const std::uint64_t k =
-                                    self->key_(self->data_[i]);
-                                if (k < mn) mn = k;
-                                if (k > mx) mx = k;
-                            }
-                            if (mn != mx) {
-                                std::size_t child_buckets =
-                                    self->sort_opt_.bucket_limit
-                                        ? self->sort_opt_.bucket_limit
-                                        : 1;
-                                if (self->par_opt_.max_buckets) {
-                                    child_buckets = (std::min)(
-                                        child_buckets,
-                                        self->par_opt_.max_buckets);
-                                }
-                                child_buckets = (std::max)(
-                                    std::size_t(1),
-                                    (std::min)(len, child_buckets));
-                                const std::size_t child_team =
-                                    self->eng_.team_for_child();
-                                auto child = std::make_shared<root_node>(
-                                    self->eng_, self->data_ + s.first, len,
-                                    child_team, child_buckets, p.level,
-                                    self->stop_len_, mn, mx, self->key_,
-                                    self->less_, self->fallback_,
-                                    self->sort_opt_, self->par_opt_);
-                                if (child->admitted()) {
-                                    child->start();
-                                    continue;
-                                }
-                            }
-                        }
+        auto self = this->shared_from_this();
+        eng_.submit([self, alloc, pumps] { self->pump(alloc, pumps); }, 2);
+    }
 
-                        std::vector<T> scratch(len);
-                        oblivone::detail::sort_range(
-                            self->data_ + s.first, len, p.level, self->key_,
-                            self->less_, self->fallback_, self->sort_opt_,
-                            scratch);
+    void handle_plan(const plan& p) {
+        for (const span& s : p.spans) {
+            const std::size_t len = s.last - s.first;
+            if (len < 2) continue;
+
+            if (len > stop_len_ && p.level < sort_opt_.max_depth) {
+                std::uint64_t mn = key_(data_[s.first]);
+                std::uint64_t mx = mn;
+                for (std::size_t i = s.first + 1; i < s.last; ++i) {
+                    const std::uint64_t k = key_(data_[i]);
+                    if (k < mn) mn = k;
+                    if (k > mx) mx = k;
+                }
+                if (mn != mx) {
+                    std::size_t child_buckets = sort_opt_.bucket_limit
+                                                    ? sort_opt_.bucket_limit
+                                                    : 1;
+                    if (par_opt_.max_buckets) {
+                        child_buckets =
+                            (std::min)(child_buckets, par_opt_.max_buckets);
                     }
-                },
-                2);
+                    child_buckets = (std::max)(
+                        std::size_t(1), (std::min)(len, child_buckets));
+                    const std::size_t child_team = eng_.team_for_child();
+                    auto child = std::make_shared<root_node>(
+                        eng_, data_ + s.first, len, child_team, child_buckets,
+                        p.level, stop_len_, mn, mx, key_, less_, fallback_,
+                        sort_opt_, par_opt_);
+                    if (child->admitted()) {
+                        child->start();
+                        continue;
+                    }
+                }
+            }
+
+            std::vector<T> scratch(len);
+            oblivone::detail::sort_range(data_ + s.first, len, p.level, key_,
+                                         less_, fallback_, sort_opt_, scratch);
         }
     }
 
