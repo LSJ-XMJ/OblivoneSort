@@ -2,6 +2,7 @@
 #define OBLIVONE_ADVANCED_PARTITION_HPP
 
 #include <oblivone/sort.hpp>
+#include <oblivone/detail/coarse.hpp>
 
 #include "engine.hpp"
 #include "level.hpp"
@@ -12,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -28,7 +30,8 @@ public:
               std::size_t buckets, int depth, std::size_t stop_len,
               std::uint64_t minimum, std::uint64_t maximum,
               const KeyFn& key, const LessFn& less, Fallback& fallback,
-              const oblivone::options& sort_opt, const options& par_opt)
+              const oblivone::options& sort_opt, const options& par_opt,
+              const oblivone::detail::value_bucket_map& value_map = {})
         : eng_(eng),
           data_(data),
           n_(n),
@@ -45,7 +48,8 @@ public:
           less_(less),
           fallback_(fallback),
           sort_opt_(sort_opt),
-          par_opt_(par_opt) {
+          par_opt_(par_opt),
+          value_map_(value_map) {
         chunks_ = (std::min)(workers_, n_);
         if (chunks_ == 0) chunks_ = 1;
         cached_ = sort_opt.cache_bucket_index && buckets_ <= 65536;
@@ -120,6 +124,15 @@ public:
     }
 
 private:
+    std::size_t bucket_value(const T& value) const {
+        if constexpr (std::is_arithmetic<T>::value) {
+            if (value_map_.enabled) {
+                return value_map_.index(static_cast<double>(value));
+            }
+        }
+        return bucket(key_(value));
+    }
+
     std::size_t bucket(std::uint64_t k) const {
         if (k <= minimum_) return 0;
         if (k >= maximum_) return buckets_ - 1;
@@ -141,13 +154,13 @@ private:
         auto& row = counts_[index];
         if (cached_) {
             for (std::size_t i = lo; i < hi; ++i) {
-                const std::size_t b = bucket(key_(data_[i]));
+                const std::size_t b = bucket_value(data_[i]);
                 cache_[i] = static_cast<std::uint16_t>(b);
                 ++row[b];
             }
         } else {
             for (std::size_t i = lo; i < hi; ++i) {
-                ++row[bucket(key_(data_[i]))];
+                ++row[bucket_value(data_[i])];
             }
         }
         if (remaining_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
@@ -194,7 +207,7 @@ private:
             }
         } else {
             for (std::size_t i = lo; i < hi; ++i) {
-                buffer_[off[bucket(key_(data_[i]))]++] = data_[i];
+                buffer_[off[bucket_value(data_[i])]++] = data_[i];
             }
         }
         if (remaining_.fetch_sub(1, std::memory_order_acq_rel) == 1) {
@@ -391,6 +404,7 @@ private:
     Fallback& fallback_;
     const oblivone::options& sort_opt_;
     const options& par_opt_;
+    oblivone::detail::value_bucket_map value_map_;
     std::size_t chunks_ = 1;
     bool admitted_ = false;
     std::size_t bytes_ = 0;

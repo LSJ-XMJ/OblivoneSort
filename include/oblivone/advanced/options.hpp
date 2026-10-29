@@ -11,6 +11,9 @@ struct options {
     unsigned threads = 0;
     std::size_t min_n = 2000000;
     std::size_t max_buckets = 65536;
+    // 0 = automatic. Numeric inputs use a value-linear root partition.
+    std::size_t coarse_buckets = 0;
+    std::size_t local_bucket_limit = 0;
     // Logical task slots per worker for the initial group plan.
     std::size_t task_slots_per_worker = 2;
     // Workers kept out of inner/group lanes.

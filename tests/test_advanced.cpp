@@ -148,6 +148,34 @@ void check_sort() {
         return;
     }
 
+    std::vector<double> nan_values(100000);
+    for (auto& x : nan_values) x = d(rng);
+    nan_values[0] = (std::numeric_limits<double>::quiet_NaN)();
+    nan_values[1] = (std::numeric_limits<double>::infinity)();
+    nan_values[2] = -(std::numeric_limits<double>::infinity)();
+    nan_values[3] = -0.0;
+    nan_values[4] = 0.0;
+    auto nan_ref = nan_values;
+    std::sort(nan_ref.begin(), nan_ref.end(),
+              [](double a, double b) {
+                  return oblivone::detail::key_of(a) <
+                         oblivone::detail::key_of(b);
+              });
+    oblivone::advanced::parallel_sort(nan_values, oblivone::options{}, popt);
+    for (std::size_t i = 0; i < nan_values.size(); ++i) {
+        if (oblivone::detail::key_of(nan_values[i]) !=
+            oblivone::detail::key_of(nan_ref[i])) {
+            std::printf("FAIL advanced NaN parallel at %zu\n", i);
+            ++failures;
+            return;
+        }
+    }
+    if (!std::isnan(nan_values.back())) {
+        std::printf("FAIL advanced NaN parallel not last\n");
+        ++failures;
+        return;
+    }
+
     std::vector<double> cached_values(100000);
     for (auto& x : cached_values) x = d(rng);
     auto cached_ref = cached_values;
@@ -285,6 +313,34 @@ void check_allocator() {
         }
     }
 }
+void check_sort_by_advanced() {
+    struct item {
+        int key;
+    };
+    std::mt19937_64 rng(5151);
+    std::uniform_int_distribution<int> d(-1000000, 1000000);
+    std::vector<item> values(50000);
+    for (auto& value : values) value.key = d(rng);
+    auto reference = values;
+    std::sort(reference.begin(), reference.end(),
+              [](const item& a, const item& b) { return a.key < b.key; });
+
+    oblivone::advanced::options popt;
+    popt.threads = 4;
+    popt.min_n = 1000;
+    oblivone::advanced::parallel_sort_by(
+        values, [](const item& value) {
+            return oblivone::detail::key_of(value.key);
+        },
+        oblivone::options{}, popt);
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (values[i].key != reference[i].key) {
+            std::printf("FAIL advanced sort_by at %zu\n", i);
+            ++failures;
+            return;
+        }
+    }
+}
 }  // namespace
 
 int main() {
@@ -293,6 +349,7 @@ int main() {
     check_exception();
     check_allocator();
     check_sort();
+    check_sort_by_advanced();
     check_executor_and_budget();
     if (failures == 0) {
         std::printf("test_advanced passed\n");

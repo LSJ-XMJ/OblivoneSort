@@ -3,11 +3,14 @@
 
 #include <oblivone/sort.hpp>
 
+#include <oblivone/detail/coarse.hpp>
+
 #include "engine.hpp"
 #include "options.hpp"
 #include "partition.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -63,6 +66,13 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
 
     std::vector<std::uint64_t> mins(threads);
     std::vector<std::uint64_t> maxs(threads);
+    std::vector<T> value_mins;
+    std::vector<T> value_maxs;
+    std::vector<unsigned char> value_nan(threads, 0);
+    if constexpr (std::is_arithmetic<T>::value) {
+        value_mins.resize(threads);
+        value_maxs.resize(threads);
+    }
     for (unsigned t = 0; t < threads; ++t) {
         eng->submit(
             [&, t] {
@@ -70,10 +80,35 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
                 const std::size_t hi = n * (t + 1) / threads;
                 std::uint64_t mn = key(data[lo]);
                 std::uint64_t mx = mn;
-                for (std::size_t i = lo + 1; i < hi; ++i) {
-                    const std::uint64_t k = key(data[i]);
-                    if (k < mn) mn = k;
-                    if (k > mx) mx = k;
+                if constexpr (std::is_arithmetic<T>::value) {
+                    T vmn = data[lo];
+                    T vmx = vmn;
+                    bool nan = false;
+                    for (std::size_t i = lo + 1; i < hi; ++i) {
+                        if constexpr (std::is_floating_point<T>::value) {
+                            if (std::isnan(data[i])) {
+                                nan = true;
+                            } else {
+                                vmn = (std::min)(vmn, data[i]);
+                                vmx = (std::max)(vmx, data[i]);
+                            }
+                        } else {
+                            vmn = (std::min)(vmn, data[i]);
+                            vmx = (std::max)(vmx, data[i]);
+                        }
+                        const std::uint64_t k = key(data[i]);
+                        if (k < mn) mn = k;
+                        if (k > mx) mx = k;
+                    }
+                    value_mins[t] = vmn;
+                    value_maxs[t] = vmx;
+                    value_nan[t] = nan ? 1 : 0;
+                } else {
+                    for (std::size_t i = lo + 1; i < hi; ++i) {
+                        const std::uint64_t k = key(data[i]);
+                        if (k < mn) mn = k;
+                        if (k > mx) mx = k;
+                    }
                 }
                 mins[t] = mn;
                 maxs[t] = mx;
@@ -90,19 +125,52 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
     }
     if (minimum == maximum) return;
 
+    oblivone::detail::value_bucket_map value_map;
+    if constexpr (std::is_arithmetic<T>::value) {
+        T vmin = value_mins[0];
+        T vmax = value_maxs[0];
+        bool nan = value_nan[0] != 0;
+        for (unsigned t = 1; t < threads; ++t) {
+            nan = nan || value_nan[t] != 0;
+            vmin = (std::min)(vmin, value_mins[t]);
+            vmax = (std::max)(vmax, value_maxs[t]);
+        }
+        if (!nan) {
+            const std::size_t coarse =
+                par_opt.coarse_buckets
+                    ? par_opt.coarse_buckets
+                    : oblivone::detail::automatic_coarse_buckets(n);
+            value_map = oblivone::detail::make_value_bucket_map(
+                static_cast<double>(vmin), static_cast<double>(vmax),
+                (std::max)(std::size_t(1), (std::min)(n, coarse)));
+        }
+    }
+
     oblivone::options effective = sort_opt;
-    std::size_t buckets = effective.bucket_limit ? effective.bucket_limit : 1;
+    std::size_t buckets = value_map.enabled
+                              ? value_map.buckets
+                              : (effective.bucket_limit
+                                     ? effective.bucket_limit
+                                     : 1);
     if (par_opt.max_buckets) {
         buckets = (std::min)(buckets, par_opt.max_buckets);
     }
-    buckets = (std::max)(std::size_t(1), (std::min)(n, buckets));
+    buckets = (std::max)(std::size_t(1), buckets);
+    value_map.buckets = buckets;
+    if (value_map.enabled) {
+        effective.bucket_limit =
+            par_opt.local_bucket_limit
+                ? par_opt.local_bucket_limit
+                : oblivone::detail::automatic_local_buckets(n);
+    }
 
     auto node = std::make_shared<
         root_node<T, KeyFn, LessFn, Fallback>>(
         *eng, data, n, threads, buckets, 0,
         (std::max)(std::size_t(1024),
                    static_cast<std::size_t>(n / threads)),
-        minimum, maximum, key, less, fallback, effective, par_opt);
+        minimum, maximum, key, less, fallback, effective, par_opt,
+        value_map);
     if (!node->admitted()) {
         oblivone::detail::sort_impl(data, n, key, less, effective, fallback);
         return;

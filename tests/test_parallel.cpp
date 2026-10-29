@@ -51,6 +51,20 @@ struct Item {
     std::int64_t key;
 };
 
+void check_nan_parallel() {
+    std::mt19937_64 rng(7171);
+    std::uniform_real_distribution<double> d(-1.0, 1.0);
+    std::vector<double> values(100000);
+    for (auto& value : values) value = d(rng);
+    values[0] = (std::numeric_limits<double>::quiet_NaN)();
+    values[1] = (std::numeric_limits<double>::infinity)();
+    values[2] = -(std::numeric_limits<double>::infinity)();
+    values[3] = -0.0;
+    values[4] = 0.0;
+    verify("nan parallel", values, 4);
+    verify("nan parallel", values, 8);
+}
+
 void check_sort_by() {
     std::mt19937_64 rng(4242);
     std::uniform_int_distribution<std::int64_t> d(-100000, 100000);
@@ -140,6 +154,7 @@ int main() {
 
     check_sort_by();
     check_pool_reuse();
+    check_nan_parallel();
 
     if (failures == 0) {
         std::printf("test_parallel passed\n");

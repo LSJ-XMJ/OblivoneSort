@@ -3,8 +3,11 @@
 
 #include "sort.hpp"
 
+#include "detail/coarse.hpp"
+
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -142,6 +145,10 @@ struct parallel_options {
     unsigned threads = 0;
     std::size_t min_n = 2000000;
     std::size_t max_buckets = 65536;
+    // 0 = automatic. Numeric inputs use a value-linear root partition, then
+    // sort each coarse block with local_bucket_limit.
+    std::size_t coarse_buckets = 0;
+    std::size_t local_bucket_limit = 0;
     // 0 = n * sizeof(T).
     std::size_t scratch_budget = 0;
     // Optional persistent pool; empty means a temporary pool per call.
@@ -182,21 +189,50 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         threads = pool->size();
     }
 
-    std::size_t buckets = opt.bucket_limit ? opt.bucket_limit : 1;
-    if (popt.max_buckets) buckets = (std::min)(buckets, popt.max_buckets);
-    buckets = (std::max)(std::size_t(1), (std::min)(n, buckets));
-
     std::vector<std::uint64_t> minima(threads);
     std::vector<std::uint64_t> maxima(threads);
+    std::vector<T> value_minima;
+    std::vector<T> value_maxima;
+    std::vector<unsigned char> value_nan(threads, 0);
+    if constexpr (std::is_arithmetic<T>::value) {
+        value_minima.resize(threads);
+        value_maxima.resize(threads);
+    }
+
     pool->run(threads, [&](unsigned t) {
         const std::size_t lo = n * t / threads;
         const std::size_t hi = n * (t + 1) / threads;
         std::uint64_t mn = key(data[lo]);
         std::uint64_t mx = mn;
-        for (std::size_t i = lo + 1; i < hi; ++i) {
-            const std::uint64_t k = key(data[i]);
-            if (k < mn) mn = k;
-            if (k > mx) mx = k;
+        if constexpr (std::is_arithmetic<T>::value) {
+            T vmn = data[lo];
+            T vmx = vmn;
+            bool nan = false;
+            for (std::size_t i = lo + 1; i < hi; ++i) {
+                if constexpr (std::is_floating_point<T>::value) {
+                    if (std::isnan(data[i])) {
+                        nan = true;
+                    } else {
+                        vmn = (std::min)(vmn, data[i]);
+                        vmx = (std::max)(vmx, data[i]);
+                    }
+                } else {
+                    vmn = (std::min)(vmn, data[i]);
+                    vmx = (std::max)(vmx, data[i]);
+                }
+                const std::uint64_t k = key(data[i]);
+                if (k < mn) mn = k;
+                if (k > mx) mx = k;
+            }
+            value_minima[t] = vmn;
+            value_maxima[t] = vmx;
+            value_nan[t] = nan ? 1 : 0;
+        } else {
+            for (std::size_t i = lo + 1; i < hi; ++i) {
+                const std::uint64_t k = key(data[i]);
+                if (k < mn) mn = k;
+                if (k > mx) mx = k;
+            }
         }
         minima[t] = mn;
         maxima[t] = mx;
@@ -210,17 +246,58 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
     }
     if (minimum == maximum) return;
 
-    const double span = static_cast<double>(maximum - minimum);
-    const double scale = static_cast<double>(buckets) / span;
-    auto bucket_of = [&](std::uint64_t k) -> std::size_t {
+    detail::value_bucket_map value_map;
+    if constexpr (std::is_arithmetic<T>::value) {
+        T vmin = value_minima[0];
+        T vmax = value_maxima[0];
+        bool nan = value_nan[0] != 0;
+        for (unsigned t = 1; t < threads; ++t) {
+            nan = nan || value_nan[t] != 0;
+            vmin = (std::min)(vmin, value_minima[t]);
+            vmax = (std::max)(vmax, value_maxima[t]);
+        }
+        if (!nan) {
+            const std::size_t coarse =
+                popt.coarse_buckets
+                    ? popt.coarse_buckets
+                    : detail::automatic_coarse_buckets(n);
+            value_map = detail::make_value_bucket_map(
+                static_cast<double>(vmin), static_cast<double>(vmax),
+                (std::max)(std::size_t(1), (std::min)(n, coarse)));
+        }
+    }
+
+    std::size_t buckets = value_map.enabled
+                              ? value_map.buckets
+                              : (opt.bucket_limit ? opt.bucket_limit : 1);
+    if (popt.max_buckets) buckets = (std::min)(buckets, popt.max_buckets);
+    buckets = (std::max)(std::size_t(1), buckets);
+    value_map.buckets = buckets;
+
+    const std::size_t local_limit =
+        popt.local_bucket_limit
+            ? popt.local_bucket_limit
+            : detail::automatic_local_buckets(n);
+
+    const double key_span = static_cast<double>(maximum - minimum);
+    const double key_scale = static_cast<double>(buckets) / key_span;
+    auto bucket_of = [&](const T& value) -> std::size_t {
+        if constexpr (std::is_arithmetic<T>::value) {
+            if (value_map.enabled) {
+                return value_map.index(static_cast<double>(value));
+            }
+        }
+        const std::uint64_t k = key(value);
         if (k <= minimum) return 0;
         if (k >= maximum) return buckets - 1;
         const std::size_t b =
-            static_cast<std::size_t>(static_cast<double>(k - minimum) * scale);
+            static_cast<std::size_t>(static_cast<double>(k - minimum) *
+                                     key_scale);
         return b >= buckets ? buckets - 1 : b;
     };
 
-    const bool use_cache = opt.cache_bucket_index && buckets <= 65536;
+    const bool use_cache =
+        !value_map.enabled && opt.cache_bucket_index && buckets <= 65536;
     std::vector<std::uint16_t> cache;
     if (use_cache) cache.resize(n);
 
@@ -232,13 +309,13 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         auto& counts = local[t];
         if (use_cache) {
             for (std::size_t i = lo; i < hi; ++i) {
-                const std::size_t b = bucket_of(key(data[i]));
+                const std::size_t b = bucket_of(data[i]);
                 cache[i] = static_cast<std::uint16_t>(b);
                 ++counts[b];
             }
         } else {
             for (std::size_t i = lo; i < hi; ++i) {
-                ++counts[bucket_of(key(data[i]))];
+                ++counts[bucket_of(data[i])];
             }
         }
     });
@@ -285,7 +362,7 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
             }
         } else {
             for (std::size_t i = lo; i < hi; ++i) {
-                const std::size_t b = bucket_of(key(data[i]));
+                const std::size_t b = bucket_of(data[i]);
                 buffer[off[b]++] = data[i];
             }
         }
@@ -297,6 +374,11 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         std::copy(buffer.begin() + static_cast<std::ptrdiff_t>(lo),
                   buffer.begin() + static_cast<std::ptrdiff_t>(hi), data + lo);
     });
+
+    oblivone::options group_opt = opt;
+    if (value_map.enabled) {
+        group_opt.bucket_limit = local_limit;
+    }
 
     auto sort_group = [&](std::size_t b, std::vector<T>& scratch) {
         const std::size_t len =
@@ -314,7 +396,8 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         } else if (len < opt.small_sort) {
             fallback(group, group + len, less);
         } else {
-            detail::sort_range(group, len, 1, key, less, fallback, opt, scratch);
+            detail::sort_range(group, len, 1, key, less, fallback, group_opt,
+                               scratch);
         }
     };
 
