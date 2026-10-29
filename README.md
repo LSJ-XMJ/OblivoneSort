@@ -3,41 +3,44 @@
 [![CI](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml/badge.svg)](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-> **2.0.0 test release (pre-release). Not merged into `main`.**
+> **2.0.0**
 >
-> The official parallel API is `oblivone::parallel`. The advanced scheduler
-> under `oblivone::advanced` is experimental and is not installed.
-> v1.1.0 remains the last archived release. No additional 2.0.0 docs are
-> provided for this test release.
-
-C++17, header-only, non-stable distribution sort.
-
-OblivoneSort maps values to an order-preserving `uint64_t` key, computes a
-bucket directly from that key, then performs count, prefix sum, scatter, and
-recursive or insertion sorting inside buckets.
-
-> **Scope**: random/smooth numeric distributions.
+> 正式并行 API 为 `oblivone::parallel`；`oblivone::advanced` 下的调度器为实验性实现，不进入安装包。
 >
-> It does not target structured data; TimSort is stronger on organ/runs/push
-> inputs.
+> 中文文档：[总览](docs/docs_2_0_0/README.md)
+>
+> English documentation:
+> [Design](docs/docs_2_0_0_EN/design.md) ·
+> [Parallel design](docs/docs_2_0_0_EN/parallel-design.md) ·
+> [Usage](docs/docs_2_0_0_EN/usage.md) ·
+> [Benchmarks](docs/docs_2_0_0_EN/benchmarks.md)
 
-Current version: `2.0.0`.
+C++17、header-only、非稳定分布排序。
 
-## Features
+OblivoneSort 将元素映射为保序的 `uint64_t` key，直接由 key 计算桶号，然后执行
+count、prefix sum、scatter，并在桶内递归或使用插入排序。
 
-- Single-threaded `sort` / `sort_by`;
-- public parallel `parallel_sort` / `parallel_sort_by`;
-- reusable `thread_pool` for parallel calls;
-- advanced work-stealing scheduler, experimental and not installed;
-- optional bucket-index cache (off by default);
-- NaN ordered last for double/float, `-0 == +0`;
-- default fallback uses insertion sort for small ranges;
-- injectable custom key and fallback;
-- no `<thread>` dependency in the core headers;
-- no third-party runtime dependency;
-- Apache-2.0, no patents.
+> **适用范围**：random / 平滑数值分布。
+>
+> 不针对结构化数据；在 organ / runs / push 等模式上 TimSort 更强。
 
-## Quick start
+当前版本：`2.0.0`。
+
+## 特性
+
+- 单线程 `sort` / `sort_by`；
+- 正式并行 `parallel_sort` / `parallel_sort_by`；
+- 可复用 `thread_pool`；
+- advanced work-stealing 调度器，实验性，不安装；
+- 可选桶号缓存，默认关闭；
+- double/float 的 NaN 排在最后，`-0 == +0`；
+- 小范围默认使用插入排序；
+- 支持自定义 key 和自定义 fallback；
+- 串行核心不依赖 `<thread>`；
+- 无第三方运行时依赖；
+- Apache-2.0，无专利限制。
+
+## 快速开始
 
 ```cpp
 #include <oblivone/sort.hpp>
@@ -46,7 +49,7 @@ std::vector<double> values = ...;
 oblivone::sort(values);
 ```
 
-Custom key:
+自定义 key：
 
 ```cpp
 struct Item {
@@ -59,11 +62,11 @@ oblivone::sort_by(items, [](const Item& item) {
 });
 ```
 
-A custom key must be order-preserving and convertible to `uint64_t`.
+自定义 key 必须保序，并且可转换为 `uint64_t`。
 
-## Parallel
+## 并行
 
-The 2.0 parallel layer is a separate header:
+2.0 的并行层是独立头文件：
 
 ```cpp
 #include <oblivone/parallel.hpp>
@@ -76,7 +79,7 @@ popt.max_buckets = 65536;
 oblivone::parallel_sort(values, oblivone::options{}, popt);
 ```
 
-Reusing a pool:
+复用线程池：
 
 ```cpp
 oblivone::thread_pool pool(12);
@@ -86,23 +89,22 @@ popt.pool = &pool;
 oblivone::parallel_sort(values, oblivone::options{}, popt);
 ```
 
-`sort` never creates threads. A custom key or fallback used through the parallel
-API must be reentrant and thread-safe.
+`sort` 不会创建线程。通过并行 API 使用的自定义 key 或 fallback 必须可重入且线程安全。
 
-## Options
+## 选项
 
 ```cpp
 oblivone::options opt;
-opt.small_top      = 48;     // top-level n <= 48 -> fallback
-opt.small_sort     = 16;     // core group m < 16 -> fallback
-opt.leaf_sort      = 22;     // group m < 22 -> insertion
-opt.scan_threshold = 256;    // nested scan; 0 = disabled
-opt.max_depth      = 16;     // recursion limit
-opt.bucket_limit   = 65536;  // per-level bucket limit
-opt.cache_bucket_index = false;  // bucket-index cache
+opt.small_top      = 48;     // 顶层 n <= 48 时交给 fallback
+opt.small_sort     = 16;     // 核心组 m < 16 时交给 fallback
+opt.leaf_sort      = 22;     // 组 m < 22 时使用插入排序
+opt.scan_threshold = 256;    // 嵌套块有序扫描；0 表示关闭
+opt.max_depth      = 16;     // 递归深度上限
+opt.bucket_limit   = 65536;  // 每层桶数上限
+opt.cache_bucket_index = false;  // 桶号缓存
 ```
 
-### Bucket-index cache
+### 桶号缓存
 
 ```cpp
 oblivone::options opt;
@@ -110,84 +112,46 @@ opt.cache_bucket_index = true;
 oblivone::sort_by(values, expensive_key, opt);
 ```
 
-Rules:
+规则：
 
-- off by default;
-- effective only when the number of buckets `B <= 65536`;
-- uses a `uint16_t` table;
-- `B > 65536` automatically disables the cache;
-- requires about `2n` extra bytes;
-- useful for expensive custom keys; default integer keys do not always benefit.
+- 默认关闭；
+- 仅当桶数 `B <= 65536` 时生效；
+- 使用 `uint16_t` 表；
+- `B > 65536` 时自动禁用；
+- 额外占用约 `2n` 字节；
+- 适合昂贵自定义 key；默认整数 key 不一定受益。
 
-## Semantics
+## 语义
 
-- not stable;
-- all NaNs are placed after non-NaNs;
-- `-0.0` and `+0.0` compare equal;
-- `n > UINT32_MAX` goes directly to fallback;
-- default fallback: insertion for arithmetic ranges with n <= 96, otherwise
-  `std::sort`;
-- a custom fallback must use the same `less`; worst case O(k log k);
-- exceptions provide only the basic guarantee.
+- 不稳定排序；
+- 所有 NaN 排在非 NaN 之后；
+- `-0.0` 与 `+0.0` 比较相等；
+- `n > UINT32_MAX` 直接使用 fallback；
+- 默认 fallback：算术范围且 `n <= 96` 使用插入排序，否则使用 `std::sort`；
+- 自定义 fallback 必须使用相同的 `less`；最坏复杂度为 O(k log k)；
+- 异常只提供基本保证。
 
-## Performance
+## 性能
 
-The following compares only with `std::sort`, using GCC 15.2, `-O2`, and
-median timings. Absolute values depend on CPU and thermal state.
+2.0.0 对数值输入使用值域粗桶。
 
-### 1e6, serial
+标准对比：13 种模式、double、GCC 15.2、Boost 1.89；1e7 数据使用
+12 线程。完整数据见 [benchmarks.md](docs/docs_2_0_0/benchmarks.md)。
 
-| pattern | std::sort | OblivoneSort |
-|---|---:|---:|
-| random | 83.6 ms | **24.3 ms** |
-| sorted | 32.2 ms | **1.44 ms** |
-| reverse | 22.5 ms | **1.66 ms** |
-| organ | 101.8 ms | **19.5 ms** |
-| sawtooth | 43.9 ms | **16.1 ms** |
-| runs | 69.9 ms | **20.6 ms** |
-| equal | 21.7 ms | **1.84 ms** |
-| few | 29.1 ms | **10.4 ms** |
-| near 1% | 33.8 ms | **19.7 ms** |
-| push back | 121.5 ms | **15.3 ms** |
+1e7 部分结果：
 
-### 1e7, serial
-
-| pattern | std::sort | OblivoneSort |
-|---|---:|---:|
-| random | 965.5 ms | **260.1 ms** |
-| sorted | 408.4 ms | **16.1 ms** |
-| organ | 1417.8 ms | **191.7 ms** |
-| runs | 828.1 ms | **210.3 ms** |
-| few | 344.9 ms | **99.7 ms** |
-| near 1% | 422.4 ms | **202.1 ms** |
-| push back | 1502.1 ms | **134.6 ms** |
-
-### 1e7 parallel, 12 threads
-
-| pattern | serial | parallel | speedup |
+| 模式 | simple | advanced | 最快 Boost |
 |---|---:|---:|---:|
-| random | 422.1 ms | **93.5 ms** | 4.51× |
-| few | 163.6 ms | **55.7 ms** | 2.94× |
-| organ | 244.9 ms | **99.9 ms** | 2.45× |
+| random | **54.2 ms** | 58.5 ms | 122.6 ms |
+| runs | **52.6 ms** | 55.5 ms | 98.9 ms |
+| sawtooth | **40.3 ms** | 43.7 ms | 46.8 ms |
+| organ | 63.3 ms | 66.3 ms | **29.5 ms** |
+| push back | 64.9 ms | 64.6 ms | **32.5 ms** |
 
-The public simple parallel layer has passed TSan. The advanced scheduler is
-experimental, not installed, and not part of the public API.
+并行在 random / 平滑数据上最强。TimSort 和 Boost `sample_sort` 在
+organ、push 类输入上更强。
 
-### Boundaries
-
-These results are not a claim of being fastest in every case:
-
-- random/smooth distributions are the main strength;
-- organ/runs/push: TimSort can be faster;
-- few/near-sorted: pdqsort/Boost spreadsort can be faster;
-- cache benefit disappears at very large n;
-- the public simple parallel layer has passed TSan;
-- the advanced scheduler is experimental, not installed, and not part of the
-  public API.
-
-See the historical v1.1.0 benchmark documentation for parallel comparisons.
-
-## Build
+## 构建
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -195,56 +159,57 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-Install:
+安装：
 
 ```bash
 cmake --install build --prefix /your/prefix
 ```
 
-CMake target:
+CMake target：
 
 ```cmake
-target_link_libraries(app PRIVATE oblivone::oblivone)   # serial
-target_link_libraries(app PRIVATE oblivone::parallel)   # parallel, links Threads
+target_link_libraries(app PRIVATE oblivone::oblivone)   # 串行
+target_link_libraries(app PRIVATE oblivone::parallel)   # 并行，链接 Threads
 ```
 
-The serial target does not link Threads.
+串行 target 不链接 Threads。
 
-## Suitable / not suitable
+## 适用与不适用
 
-Suitable:
+适合：
 
-- random floating-point or integer data;
-- relatively smooth distributions;
-- large n with a header-only, no-third-party-dependency requirement;
-- environments where the serial core must not create threads.
+- random 浮点或整数数据；
+- 分布相对平滑；
+- 大 n，且要求 header-only、无第三方运行时依赖；
+- 串行核心不能创建线程的环境。
 
-Not suitable:
+不适用：
 
-- mostly sorted or near-sorted data;
-- many runs/structured data;
-- stable-sort requirements;
-- no extra `n` buffer available;
-- very small n (plain `std::sort` is simpler).
+- 基本有序或接近有序数据；
+- 大量 runs / 结构化数据；
+- 要求稳定排序；
+- 没有额外 `n` 缓冲区；
+- 极小 n，直接使用 `std::sort` 更简单。
 
-## Release status
+## 发布状态
 
 ```text
-version header     2.0.0
-CMake project      2.0.0
-release tag        v2.0.0-test
-release type       pre-release / test
-target branch      v2.0.0-dev
-main branch        not merged
-additional docs    none for 2.0.0
-Zenodo DOI         pending
-CITATION DOI       pending
+版本头文件       2.0.0
+CMake 项目       2.0.0
+发布 tag         v2.0.0
+发布类型         正式
+目标分支         main
+发布来源         v2.0.0-dev
+main             已合并
+额外文档         docs/docs_2_0_0, docs/docs_2_0_0_EN
+Zenodo DOI       待回填
+CITATION DOI     待回填
 ```
 
-## Author
+## 作者
 
-肖明杰.
+肖明杰。
 
-## License
+## 许可证
 
-Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache-2.0。见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。

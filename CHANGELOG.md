@@ -1,6 +1,6 @@
 # Changelog
 
-## v2.0.0 — 2026-10-29 (test release)
+## v2.0.0 — 2026-10-30
 
 ### Added
 
@@ -15,14 +15,17 @@
 
 - 2.0.0 starts from the serial-only baseline, then adds the public simple
   parallel layer.
+- Numeric parallel sorting uses a value-aware coarse root partition with
+  adaptive local bucket limits.
+- NaN and custom keys use the key-based fallback path.
 - `oblivone::version` is `2.0.0`.
 
 ### Notes
 
-- Test release / pre-release only; not merged into `main`.
 - The official parallel API is the simple phase-pool layer.
 - The advanced scheduler is experimental and not installed.
-- No additional 2.0.0 documentation is provided.
+- 2.0.0 documentation is under `docs/docs_2_0_0` and
+  `docs/docs_2_0_0_EN`.
 - Tag, GitHub Release and the Zenodo DOI are repository-owner actions.
 - `CITATION.cff` DOI must be updated after the 2.0.0 archive exists.
 
