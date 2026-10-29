@@ -19,3 +19,6 @@ docs/stop/
 research/
 old/
 test_myself/
+build-release/
+stage/
+dist/

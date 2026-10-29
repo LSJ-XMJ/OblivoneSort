@@ -1,5 +1,34 @@
 # Changelog
 
+## v2.0.0 — 2026-10-30
+
+### Added
+
+- Public `oblivone::parallel` layer: `thread_pool`, `parallel_options`,
+  `parallel_sort`, `parallel_sort_by`.
+- `oblivone::parallel` CMake target and installed Threads dependency.
+- `tests/test_parallel.cpp`, `fuzz_advanced` test coverage and a TSan workflow.
+- Experimental `oblivone::advanced` work-stealing scheduler, excluded from
+  install and not part of the public API.
+
+### Changed
+
+- 2.0.0 starts from the serial-only baseline, then adds the public simple
+  parallel layer.
+- Numeric parallel sorting uses a value-aware coarse root partition with
+  adaptive local bucket limits.
+- NaN and custom keys use the key-based fallback path.
+- `oblivone::version` is `2.0.0`.
+
+### Notes
+
+- The official parallel API is the simple phase-pool layer.
+- The advanced scheduler is experimental and not installed.
+- 2.0.0 documentation is under `docs/docs_2_0_0` and
+  `docs/docs_2_0_0_EN`.
+- Tag, GitHub Release and the Zenodo DOI are repository-owner actions.
+- `CITATION.cff` DOI must be updated after the 2.0.0 archive exists.
+
 ## v1.1.0 — 2026-10-28
 
 ### Added
