@@ -7,6 +7,7 @@ abstract: "A C++17 header-only distribution sort: order-preserving keys, direct 
 authors:
   - name: "肖明杰 (Xiao Mingjie)"
 repository-code: "https://github.com/LSJ-XMJ/OblivoneSort"
+doi: "10.5281/zenodo.23675733"
 license: "Apache-2.0"
 keywords:
   - "sorting"

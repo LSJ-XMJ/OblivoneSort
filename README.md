@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml/badge.svg)](https://github.com/LSJ-XMJ/OblivoneSort/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23675733.svg)](https://doi.org/10.5281/zenodo.23675733)
 
 > **2.0.0**
 >
@@ -202,8 +203,8 @@ CMake 项目       2.0.0
 发布来源         v2.0.0-dev
 main             已合并
 额外文档         docs/docs_2_0_0, docs/docs_2_0_0_EN
-Zenodo DOI       待回填
-CITATION DOI     待回填
+Zenodo DOI       10.5281/zenodo.23675733
+CITATION DOI     10.5281/zenodo.23675733
 ```
 
 ## 作者
