@@ -202,8 +202,8 @@ CMake 项目       2.0.1
 发布来源         main
 main             已合并
 额外文档         docs/docs_2_0_1, docs/docs_2_0_1_EN
-Zenodo DOI       10.5281/zenodo.23675733（concept，待新版回填）
-CITATION DOI     10.5281/zenodo.23675733
+Zenodo DOI       10.5281/zenodo.23675733（concept）
+CITATION DOI     10.5281/zenodo.23837745（2.0.1 version）
 ```
 
 ## 作者
