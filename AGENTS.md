@@ -7,7 +7,7 @@
 
 - C++17、header-only、**非稳定**分布排序；Apache-2.0；无第三方运行时依赖。
 - 作者：肖明杰；仓库：<https://github.com/LSJ-XMJ/OblivoneSort>。
-- 当前版本：`2.0.1`（发布准备中；tag `v2.0.0` 已发布；DOI `10.5281/zenodo.23675733`，新版 version DOI 发布后回填）。
+- 当前版本：`2.0.1`（2026-10-31 发布；concept DOI `10.5281/zenodo.23675733`，version DOI `10.5281/zenodo.23837745`）。
 - 定位：random / smooth 数值分布强；organ / push / few / sorted 落后，不要宣称全场景最快。
 
 ## 架构边界
@@ -50,4 +50,4 @@ ctest --test-dir build --output-on-failure
 - 完整历史、已放弃方向、待办与已知问题：`docs/stop/HANDOFF-2.0.0.md`。
 - 发布数据：`docs/docs_2_0_1/test-record.md` + `test-data/*.csv`。
 - 强外部基线复现：`test_myself/bench/bench_docs.cpp`（需 Boost 1.89 与 TimSort 头，本地）。
-- 当前发布页待核对：GitHub Release 资产数量、Zenodo 2.0.1 的 version DOI（发布后回填 CITATION）。
+- 当前发布页待核对：GitHub Release 资产数量（应为 5 个 Assets）。
