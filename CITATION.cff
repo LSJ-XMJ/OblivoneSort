@@ -1,8 +1,8 @@
 cff-version: 1.2.0
 message: "If you use OblivoneSort in academic work, please cite this repository."
 title: "OblivoneSort"
-version: "2.0.0"
-date-released: "2026-10-30"
+version: "2.0.1"
+date-released: "2026-10-31"
 abstract: "A C++17 header-only distribution sort: order-preserving keys, direct bucket mapping, prefix sums, scatter, and an optional parallel phase-pool backend."
 authors:
   - name: "肖明杰 (Xiao Mingjie)"

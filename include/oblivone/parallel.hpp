@@ -205,28 +205,51 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         std::uint64_t mn = key(data[lo]);
         std::uint64_t mx = mn;
         if constexpr (std::is_arithmetic<T>::value) {
-            T vmn = data[lo];
-            T vmx = vmn;
             bool nan = false;
-            for (std::size_t i = lo + 1; i < hi; ++i) {
-                if constexpr (std::is_floating_point<T>::value) {
-                    if (std::isnan(data[i])) {
-                        nan = true;
-                    } else {
-                        vmn = (std::min)(vmn, data[i]);
-                        vmx = (std::max)(vmx, data[i]);
+            if constexpr (std::is_floating_point<T>::value) {
+                // 首元素可能是 NaN：跳过它，从第一个非 NaN 元素起统计值域，
+                // 否则 vmn/vmx 被 NaN 污染，整个数组会退回 key 分桶。
+                std::size_t first = lo;
+                while (first < hi && std::isnan(data[first])) {
+                    nan = true;
+                    ++first;
+                }
+                if (first < hi) {
+                    T vmn = data[first];
+                    T vmx = vmn;
+                    for (std::size_t i = first + 1; i < hi; ++i) {
+                        const std::uint64_t k = key(data[i]);
+                        if (k < mn) mn = k;
+                        if (k > mx) mx = k;
+                        if (std::isnan(data[i])) {
+                            nan = true;
+                        } else {
+                            vmn = (std::min)(vmn, data[i]);
+                            vmx = (std::max)(vmx, data[i]);
+                        }
                     }
+                    value_minima[t] = vmn;
+                    value_maxima[t] = vmx;
                 } else {
+                    // 本块全是 NaN：值域无效，靠 nan 标记禁用 value map。
+                    value_minima[t] = T(0);
+                    value_maxima[t] = T(0);
+                }
+                value_nan[t] = nan ? 1 : 0;
+            } else {
+                T vmn = data[lo];
+                T vmx = vmn;
+                for (std::size_t i = lo + 1; i < hi; ++i) {
                     vmn = (std::min)(vmn, data[i]);
                     vmx = (std::max)(vmx, data[i]);
+                    const std::uint64_t k = key(data[i]);
+                    if (k < mn) mn = k;
+                    if (k > mx) mx = k;
                 }
-                const std::uint64_t k = key(data[i]);
-                if (k < mn) mn = k;
-                if (k > mx) mx = k;
+                value_minima[t] = vmn;
+                value_maxima[t] = vmx;
+                value_nan[t] = 0;
             }
-            value_minima[t] = vmn;
-            value_maxima[t] = vmx;
-            value_nan[t] = nan ? 1 : 0;
         } else {
             for (std::size_t i = lo + 1; i < hi; ++i) {
                 const std::uint64_t k = key(data[i]);
@@ -261,9 +284,16 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
                 popt.coarse_buckets
                     ? popt.coarse_buckets
                     : detail::automatic_coarse_buckets(n);
+            std::size_t coarse_count =
+                (std::max)(std::size_t(1), (std::min)(n, coarse));
+            // max_buckets 同时限制粗桶数：用最终桶数构造映射，
+            // 避免 scale 按旧桶数计算导致整段值域挤进末尾桶。
+            if (popt.max_buckets) {
+                coarse_count = (std::min)(coarse_count, popt.max_buckets);
+            }
             value_map = detail::make_value_bucket_map(
                 static_cast<double>(vmin), static_cast<double>(vmax),
-                (std::max)(std::size_t(1), (std::min)(n, coarse)));
+                coarse_count);
         }
     }
 
@@ -418,7 +448,7 @@ void run(T* data, std::size_t n, const KeyFn& key, const LessFn& less,
         }
     } else {
         std::atomic<std::size_t> next{0};
-        pool->run(group_threads, [&](unsigned) {
+        pool->run(static_cast<unsigned>(group_threads), [&](unsigned) {
             std::vector<T> scratch(largest_group);
             for (;;) {
                 const std::size_t b =

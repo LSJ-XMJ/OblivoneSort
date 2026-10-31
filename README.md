@@ -4,17 +4,16 @@
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.23675733.svg)](https://doi.org/10.5281/zenodo.23675733)
 
-> **2.0.0**
+> **2.0.1**
 >
 > 正式并行 API 为 `oblivone::parallel`；`oblivone::advanced` 下的调度器为实验性实现，不进入安装包。
 >
-> 中文文档：[总览](docs/docs_2_0_0/README.md)
+> 中文文档：[总览](docs/docs_2_0_1/README.md)
 >
 > English documentation:
-> [Design](docs/docs_2_0_0_EN/design.md) ·
-> [Parallel design](docs/docs_2_0_0_EN/parallel-design.md) ·
-> [Usage](docs/docs_2_0_0_EN/usage.md) ·
-> [Benchmarks](docs/docs_2_0_0_EN/benchmarks.md)
+> [Design](docs/docs_2_0_1_EN/design.md) ·
+> [Usage](docs/docs_2_0_1_EN/usage.md) ·
+> [Test record](docs/docs_2_0_1_EN/test-record.md)
 
 C++17、header-only、非稳定分布排序。
 
@@ -25,7 +24,7 @@ count、prefix sum、scatter，并在桶内递归或使用插入排序。
 >
 > 不针对结构化数据；在 organ / runs / push 等模式上 TimSort 更强。
 
-当前版本：`2.0.0`。
+当前版本：`2.0.1`。
 
 ## 特性
 
@@ -137,7 +136,7 @@ oblivone::sort_by(values, expensive_key, opt);
 2.0.0 对数值输入使用值域粗桶。
 
 标准对比：13 种模式、double、GCC 15.2、Boost 1.89；1e7 数据使用
-12 线程。完整数据见 [benchmarks.md](docs/docs_2_0_0/benchmarks.md)。
+12 线程。完整数据见 [2.0.1 测试记录](docs/docs_2_0_1/test-record.md)。
 
 1e7 部分结果：
 
@@ -195,15 +194,15 @@ target_link_libraries(app PRIVATE oblivone::parallel)   # 并行，链接 Thread
 ## 发布状态
 
 ```text
-版本头文件       2.0.0
-CMake 项目       2.0.0
-发布 tag         v2.0.0
-发布类型         正式
+版本头文件       2.0.1
+CMake 项目       2.0.1
+发布 tag         v2.0.1
+发布类型         补丁
 目标分支         main
-发布来源         v2.0.0-dev
+发布来源         main
 main             已合并
-额外文档         docs/docs_2_0_0, docs/docs_2_0_0_EN
-Zenodo DOI       10.5281/zenodo.23675733
+额外文档         docs/docs_2_0_1, docs/docs_2_0_1_EN
+Zenodo DOI       10.5281/zenodo.23675733（concept，待新版回填）
 CITATION DOI     10.5281/zenodo.23675733
 ```
 

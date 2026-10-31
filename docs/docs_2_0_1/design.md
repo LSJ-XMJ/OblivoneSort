@@ -1,4 +1,4 @@
-# 2.0.0 单线程设计
+# 2.0.1 单线程设计
 
 ## 1. 目标
 
@@ -82,7 +82,7 @@ descending 前缀
 阈值：
 
 ```text
-n <= small_top   -> insertion
+n <= small_top   -> fallback
 n <= leaf_sort   -> budgeted insertion
 n == 2 / 3       -> 专用 network
 ```

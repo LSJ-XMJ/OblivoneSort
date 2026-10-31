@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
-# 2.0 development template. Not released.
-project(OblivoneSort VERSION 2.0.0 LANGUAGES CXX)
+# Released 2.0.1.
+project(OblivoneSort VERSION 2.0.1 LANGUAGES CXX)
 
 include(CMakePackageConfigHelpers)
 
@@ -70,6 +70,10 @@ if(BUILD_TESTING)
     add_executable(fuzz_advanced tests/fuzz_advanced.cpp)
     target_link_libraries(fuzz_advanced PRIVATE oblivone_advanced)
     add_test(NAME fuzz_advanced COMMAND fuzz_advanced 1000 1)
+
+    add_executable(fuzz_parallel tests/fuzz_parallel.cpp)
+    target_link_libraries(fuzz_parallel PRIVATE oblivone_parallel)
+    add_test(NAME fuzz_parallel COMMAND fuzz_parallel 2000)
 endif()
 
 install(DIRECTORY include/ DESTINATION include
@@ -80,6 +84,8 @@ install(EXPORT oblivoneTargets
     FILE oblivoneTargets.cmake
     NAMESPACE oblivone::
     DESTINATION lib/cmake/oblivone)
+
+install(FILES LICENSE NOTICE AUTHORS DESTINATION share/doc/oblivone)
 
 configure_package_config_file(
     cmake/oblivoneConfig.cmake.in

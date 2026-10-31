@@ -1,4 +1,4 @@
-# OblivoneSort 2.0.0
+# OblivoneSort 2.0.1
 
 C++17 header-only distribution sort.
 
@@ -46,20 +46,18 @@ oblivone::sort(values);
 - [单线程设计](design.md)
 - [并行设计](parallel-design.md)
 - [使用说明](usage.md)
-- [强势算法对比](benchmarks.md)
 - [测试记录](test-record.md)
 
 英文：
 
-- [Design](../docs_2_0_0_EN/design.md)
-- [Parallel design](../docs_2_0_0_EN/parallel-design.md)
-- [Usage](../docs_2_0_0_EN/usage.md)
-- [Benchmarks](../docs_2_0_0_EN/benchmarks.md)
+- [Design](../docs_2_0_1_EN/design.md)
+- [Usage](../docs_2_0_1_EN/usage.md)
+- [Test record](../docs_2_0_1_EN/test-record.md)
 
 原始测试数据：
 
-- [GCC](test-data/gcc.csv)
-- [MSVC](test-data/msvc.csv)
+- [13 模式矩阵 (GCC)](test-data/gcc.csv)
+- [极限与退化配置](test-data/extreme.csv)
 
 ## 适用范围
 
@@ -78,7 +76,7 @@ oblivone::sort(values);
 
 ## 当前定位
 
-2.0.0 在 random、runs、sawtooth、near 等模式具有优势；
-organ / push 仍落后 TimSort 和 Boost sample_sort。
+2.0.1 在 random、runs 等模式具有明显优势，sawtooth、few、near 5% 在并行下有一定优势；
+organ、push 仍落后 TimSort 和 Boost sample_sort。
 
-详细数据见 [benchmarks.md](benchmarks.md)。
+详细数据见 [测试记录](test-record.md)。

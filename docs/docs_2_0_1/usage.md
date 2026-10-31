@@ -1,23 +1,23 @@
-# OblivoneSort 2.0.0 Usage
+# 2.0.1 使用说明
 
-## 1. Headers
+## 1. 头文件
 
 ```cpp
-#include <oblivone/sort.hpp>          // serial
-#include <oblivone/parallel.hpp>      // installed parallel API
-#include <oblivone/advanced/sort.hpp> // experimental, not installed
+#include <oblivone/sort.hpp>          // 串行
+#include <oblivone/parallel.hpp>      // 正式并行
+#include <oblivone/advanced/sort.hpp> // 实验后端，不安装
 ```
 
 ---
 
-## 2. Serial
+## 2. 串行
 
 ```cpp
 std::vector<double> values = ...;
 oblivone::sort(values);
 ```
 
-Custom key:
+自定义 key：
 
 ```cpp
 struct Item {
@@ -31,11 +31,11 @@ oblivone::sort_by(items, [](const Item& item) {
 });
 ```
 
-The key must be order-preserving.
+要求 key 保序。
 
 ---
 
-## 3. Parallel
+## 3. 并行
 
 ```cpp
 #include <oblivone/parallel.hpp>
@@ -48,7 +48,7 @@ popt.threads = 12;
 oblivone::parallel_sort(values, oblivone::options{}, popt);
 ```
 
-Custom key:
+自定义 key：
 
 ```cpp
 oblivone::parallel_sort_by(
@@ -70,7 +70,7 @@ struct oblivone::options {
     std::size_t small_sort     = 16;
     std::size_t leaf_sort      = 22;
     std::size_t scan_threshold = 256;
-    std::size_t max_depth      = 16;
+    int max_depth             = 16;
     std::size_t bucket_limit   = 65536;
     bool cache_bucket_index    = false;
 };
@@ -92,7 +92,7 @@ struct oblivone::parallel_options {
 };
 ```
 
-Automatic values:
+自动值：
 
 ```text
 P = clamp(n / 8000, 512, 1024)
@@ -105,7 +105,7 @@ B:
 
 ---
 
-## 6. Reusable thread pool
+## 6. 持久化线程池
 
 ```cpp
 oblivone::thread_pool pool(12);
@@ -117,11 +117,11 @@ popt.min_n = 1000;
 oblivone::parallel_sort(values, oblivone::options{}, popt);
 ```
 
-A pool must be used by one caller thread at a time.
+一个 pool 只能由一个调用线程使用。
 
 ---
 
-## 7. Advanced experimental backend
+## 7. advanced 实验后端
 
 ```cpp
 #include <oblivone/advanced/sort.hpp>
@@ -132,7 +132,7 @@ popt.threads = 12;
 oblivone::advanced::parallel_sort(values, oblivone::options{}, popt);
 ```
 
-Reusable executor:
+executor：
 
 ```cpp
 oblivone::advanced::executor ex(12);
@@ -143,18 +143,18 @@ popt.min_n = 1000;
 oblivone::advanced::parallel_sort(ex, values, oblivone::options{}, popt);
 ```
 
-The advanced backend is not installed and has no stable API guarantee.
+advanced 不安装，不承诺稳定 API。
 
 ---
 
-## 8. Requirements
+## 8. 数据要求
 
 ```text
-unstable sort
-n extra elements required
-NaN sorts last
+不稳定排序
+需要额外 n 个元素空间
+NaN 最后
 -0 == +0
-custom key must be order-preserving
+custom key 必须保序
 ```
 
 ---
@@ -168,16 +168,21 @@ target_link_libraries(app PRIVATE oblivone::oblivone)  # serial
 target_link_libraries(app PRIVATE oblivone::parallel)  # parallel
 ```
 
-`oblivone::parallel` links `Threads::Threads` and `oblivone::oblivone`.
+`oblivone::parallel` 会链接：
 
-The installed package does not include `include/oblivone/advanced/`.
+```text
+Threads::Threads
+oblivone::oblivone
+```
+
+安装包不包含 `include/oblivone/advanced/`。
 
 ---
 
-## 10. Version
+## 10. 版本
 
 ```cpp
 #include <oblivone/version.hpp>
 
-oblivone::version // "2.0.0"
+oblivone::version // "2.0.1"
 ```

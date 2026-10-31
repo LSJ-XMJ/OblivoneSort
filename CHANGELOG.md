@@ -1,5 +1,32 @@
 # Changelog
 
+## v2.0.1 — 2026-10-31
+
+### Fixed
+
+- Parallel value-map partition now rebuilds with the final bucket count when
+  `max_buckets` clamps below `coarse_buckets`; previously a mismatched scale
+  could push most of the value range into the last bucket.
+- Parallel min/max no longer treats a NaN at a chunk boundary as a valid value
+  bound, so a single NaN no longer disables the value-aware path.
+- Explicit narrowing cast in `parallel.hpp` removes the MSVC `/W4` C4267
+  warning.
+
+### Added
+
+- `tests/fuzz_parallel.cpp`: differential fuzzer for the public parallel
+  backend (random options, NaN/±Inf/±0, custom keys).
+- The TSan workflow now also runs on pushes to `main`.
+- `cmake --install` now ships `LICENSE`, `NOTICE` and `AUTHORS` under
+  `share/doc/oblivone`.
+
+### Docs
+
+- 2.0.1 test record under `docs/docs_2_0_1/` and `docs/docs_2_0_1_EN/`.
+- English documents carry a translation disclaimer.
+- Fixed the `max_depth` type and the small-array wording in the usage and
+  design documents.
+
 ## v2.0.0 — 2026-10-30
 
 ### Added
@@ -26,8 +53,8 @@
 - The advanced scheduler is experimental and not installed.
 - 2.0.0 documentation is under `docs/docs_2_0_0` and
   `docs/docs_2_0_0_EN`.
-- Tag, GitHub Release and the Zenodo DOI are repository-owner actions.
-- `CITATION.cff` DOI must be updated after the 2.0.0 archive exists.
+- Tag `v2.0.0` and the GitHub Release are published.
+- `CITATION.cff` records the Zenodo DOI.
 
 ## v1.1.0 — 2026-10-28
 

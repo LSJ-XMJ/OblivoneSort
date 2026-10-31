@@ -1,23 +1,26 @@
-# 2.0.0 使用说明
+# OblivoneSort 2.0.1 Usage
 
-## 1. 头文件
+> **Note:** This document is a translation and may contain errors;
+> the Chinese documents under `docs/docs_2_0_1/` are authoritative.
+
+## 1. Headers
 
 ```cpp
-#include <oblivone/sort.hpp>          // 串行
-#include <oblivone/parallel.hpp>      // 正式并行
-#include <oblivone/advanced/sort.hpp> // 实验后端，不安装
+#include <oblivone/sort.hpp>          // serial
+#include <oblivone/parallel.hpp>      // installed parallel API
+#include <oblivone/advanced/sort.hpp> // experimental, not installed
 ```
 
 ---
 
-## 2. 串行
+## 2. Serial
 
 ```cpp
 std::vector<double> values = ...;
 oblivone::sort(values);
 ```
 
-自定义 key：
+Custom key:
 
 ```cpp
 struct Item {
@@ -31,11 +34,11 @@ oblivone::sort_by(items, [](const Item& item) {
 });
 ```
 
-要求 key 保序。
+The key must be order-preserving.
 
 ---
 
-## 3. 并行
+## 3. Parallel
 
 ```cpp
 #include <oblivone/parallel.hpp>
@@ -48,7 +51,7 @@ popt.threads = 12;
 oblivone::parallel_sort(values, oblivone::options{}, popt);
 ```
 
-自定义 key：
+Custom key:
 
 ```cpp
 oblivone::parallel_sort_by(
@@ -92,7 +95,7 @@ struct oblivone::parallel_options {
 };
 ```
 
-自动值：
+Automatic values:
 
 ```text
 P = clamp(n / 8000, 512, 1024)
@@ -105,7 +108,7 @@ B:
 
 ---
 
-## 6. 持久化线程池
+## 6. Reusable thread pool
 
 ```cpp
 oblivone::thread_pool pool(12);
@@ -117,11 +120,11 @@ popt.min_n = 1000;
 oblivone::parallel_sort(values, oblivone::options{}, popt);
 ```
 
-一个 pool 只能由一个调用线程使用。
+A pool must be used by one caller thread at a time.
 
 ---
 
-## 7. advanced 实验后端
+## 7. Advanced experimental backend
 
 ```cpp
 #include <oblivone/advanced/sort.hpp>
@@ -132,7 +135,7 @@ popt.threads = 12;
 oblivone::advanced::parallel_sort(values, oblivone::options{}, popt);
 ```
 
-executor：
+Reusable executor:
 
 ```cpp
 oblivone::advanced::executor ex(12);
@@ -143,18 +146,18 @@ popt.min_n = 1000;
 oblivone::advanced::parallel_sort(ex, values, oblivone::options{}, popt);
 ```
 
-advanced 不安装，不承诺稳定 API。
+The advanced backend is not installed and has no stable API guarantee.
 
 ---
 
-## 8. 数据要求
+## 8. Requirements
 
 ```text
-不稳定排序
-需要额外 n 个元素空间
-NaN 最后
+unstable sort
+n extra elements required
+NaN sorts last
 -0 == +0
-custom key 必须保序
+custom key must be order-preserving
 ```
 
 ---
@@ -168,21 +171,16 @@ target_link_libraries(app PRIVATE oblivone::oblivone)  # serial
 target_link_libraries(app PRIVATE oblivone::parallel)  # parallel
 ```
 
-`oblivone::parallel` 会链接：
+`oblivone::parallel` links `Threads::Threads` and `oblivone::oblivone`.
 
-```text
-Threads::Threads
-oblivone::oblivone
-```
-
-安装包不包含 `include/oblivone/advanced/`。
+The installed package does not include `include/oblivone/advanced/`.
 
 ---
 
-## 10. 版本
+## 10. Version
 
 ```cpp
 #include <oblivone/version.hpp>
 
-oblivone::version // "2.0.0"
+oblivone::version // "2.0.1"
 ```

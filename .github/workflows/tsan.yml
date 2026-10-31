@@ -3,7 +3,7 @@ name: tsan
 on:
   workflow_dispatch:
   push:
-    branches: [v2.0.0-dev, tsan-sandbox]
+    branches: [main, v2.0.0-dev, tsan-sandbox]
   pull_request:
 
 jobs:

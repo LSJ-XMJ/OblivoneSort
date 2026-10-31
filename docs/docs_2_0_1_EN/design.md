@@ -1,4 +1,7 @@
-# OblivoneSort 2.0.0 Design
+# OblivoneSort 2.0.1 Design
+
+> **Note:** This document is a translation and may contain errors;
+> the Chinese documents under `docs/docs_2_0_1/` are authoritative.
 
 ## 1. Scope
 
